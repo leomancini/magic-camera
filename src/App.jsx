@@ -63,6 +63,31 @@ const TopButton = styled.button`
   }
 `;
 
+const CloseButton = styled.button`
+  pointer-events: auto;
+  appearance: none;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+`;
+
 const ControlBar = styled.div`
   position: absolute;
   left: 0;
@@ -108,8 +133,8 @@ const pulse = keyframes`
 
 const Mic = styled.button`
   appearance: none;
-  width: 96px;
-  height: 96px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   border: 4px solid #fff;
   background: ${(p) => (p.$recording ? "#ff3b3b" : "rgba(255,255,255,0.12)")};
@@ -512,9 +537,9 @@ function App() {
             <div />
           )
         ) : (
-          <TopButton onClick={resetToLive} disabled={isProcessing}>
+          <CloseButton onClick={resetToLive} disabled={isProcessing} aria-label="Close">
             ×
-          </TopButton>
+          </CloseButton>
         )}
       </TopBar>
 
