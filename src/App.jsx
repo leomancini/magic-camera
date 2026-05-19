@@ -110,11 +110,21 @@ const Shutter = styled.button`
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.08s ease, background 0.12s ease;
   &:active {
     transform: scale(0.94);
     background: rgba(0, 0, 0, 0.65);
   }
+`;
+
+const ShutterDot = styled.div`
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #fff;
 `;
 
 const pulse = keyframes`
@@ -129,12 +139,9 @@ const Mic = styled.button`
   border-radius: 50%;
   border: none;
   padding: 0;
-  background: ${(p) =>
-    p.$recording ? "#ff3b3b" : "rgba(0, 0, 0, 0.5)"};
-  backdrop-filter: ${(p) =>
-    p.$recording ? "none" : "blur(24px) saturate(160%)"};
-  -webkit-backdrop-filter: ${(p) =>
-    p.$recording ? "none" : "blur(24px) saturate(160%)"};
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
   color: #fff;
   display: flex;
   align-items: center;
@@ -142,7 +149,7 @@ const Mic = styled.button`
   cursor: pointer;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.12s ease, transform 0.08s ease;
+  transition: transform 0.08s ease;
   ${(p) =>
     p.$recording &&
     css`
@@ -151,18 +158,22 @@ const Mic = styled.button`
   &:active {
     transform: scale(0.94);
   }
-  svg {
-    width: 38px;
-    height: 38px;
-  }
 `;
 
-const HintBubble = styled.div`
+const MicDot = styled.div`
+  width: ${(p) => (p.$recording ? "32px" : "56px")};
+  height: ${(p) => (p.$recording ? "32px" : "56px")};
+  border-radius: ${(p) => (p.$recording ? "8px" : "50%")};
+  background: #ff3b3b;
+  transition: width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
+`;
+
+const TranscriptBubble = styled.div`
   position: absolute;
   bottom: calc(max(env(safe-area-inset-bottom), 28px) + 130px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(255, 60, 60, 0.85);
   color: #fff;
   padding: 10px 16px;
   border-radius: 999px;
@@ -174,14 +185,6 @@ const HintBubble = styled.div`
   text-align: center;
   pointer-events: none;
   z-index: 5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TranscriptBubble = styled(HintBubble)`
-  background: rgba(255, 60, 60, 0.85);
-  white-space: normal;
 `;
 
 const LoadingOverlay = styled.div`
@@ -242,15 +245,6 @@ const Flash = styled.div`
   pointer-events: none;
   animation: ${flash} 0.4s ease-out;
 `;
-
-const MicIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="9" y="3" width="6" height="12" rx="3" />
-    <path d="M5 11a7 7 0 0 0 14 0" />
-    <line x1="12" y1="18" x2="12" y2="22" />
-    <line x1="8" y1="22" x2="16" y2="22" />
-  </svg>
-);
 
 const FlipIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -569,10 +563,6 @@ function App() {
   const isRecording = mode === "recording";
   const isProcessing = mode === "processing";
 
-  let hint = null;
-  if (mode === "recording")
-    hint = transcript ? null : "Listening… speak your prompt";
-
   return (
     <Stage>
       <Frame>
@@ -589,16 +579,15 @@ function App() {
       </Frame>
 
 
-      {hint && (mode !== "recording" || !transcript) && (
-        <HintBubble>{hint}</HintBubble>
-      )}
       {isRecording && transcript && (
         <TranscriptBubble>{transcript}</TranscriptBubble>
       )}
 
       <ControlBar>
         {mode === "live" && (
-          <Shutter onClick={capturePhoto} aria-label="Take photo" />
+          <Shutter onClick={capturePhoto} aria-label="Take photo">
+            <ShutterDot />
+          </Shutter>
         )}
         {(mode === "captured" || mode === "recording") && (
           <Mic
@@ -609,7 +598,7 @@ function App() {
             onPointerCancel={onMicLeave}
             aria-label="Hold to speak"
           >
-            <MicIcon />
+            <MicDot $recording={isRecording} />
           </Mic>
         )}
         {mode === "result" && (
