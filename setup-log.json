@@ -1,0 +1,10 @@
+{
+  "app_id": "magic-camera",
+  "app_name": "Magic Camera",
+  "domain": "https://magic-camera.leo.gd",
+  "host": "localhost",
+  "port": "3135",
+  "author": "leo",
+  "anthropic": false,
+  "created_on": "Mon May 18 11:05:14 PM EDT 2026"
+}
