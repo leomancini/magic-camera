@@ -41,19 +41,6 @@ const Photo = styled.img`
   object-fit: cover;
 `;
 
-const TopBar = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: max(env(safe-area-inset-top), 16px) 16px 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 5;
-  pointer-events: none;
-`;
-
 const IconButton = styled.button`
   pointer-events: auto;
   appearance: none;
@@ -274,6 +261,13 @@ const FlipIcon = () => (
   </svg>
 );
 
+const XIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="6" y1="6" x2="18" y2="18" />
+    <line x1="18" y1="6" x2="6" y2="18" />
+  </svg>
+);
+
 // Mode machine: 'live' -> 'captured' -> 'recording' -> 'processing' -> 'result'
 // 'result' returns to 'live' on close.
 
@@ -284,6 +278,7 @@ function App() {
   const transcriptRef = useRef("");
   const facingRef = useRef("environment");
   const submittingRef = useRef(false);
+  const micPrimedRef = useRef(false);
 
   const [mode, setMode] = useState("live");
   const [photo, setPhoto] = useState(null); // base64 data URL of captured frame
@@ -386,6 +381,29 @@ function App() {
     // Pause the live stream to save battery while reviewing
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
+    }
+
+    // Pre-warm microphone permission so the first tap of the mic button
+    // doesn't pause for a permission prompt. We try the Permissions API
+    // first — if already granted, we skip getUserMedia entirely to avoid
+    // any iOS mic-activation feedback. Otherwise we briefly request and
+    // immediately release the stream.
+    if (!micPrimedRef.current) {
+      micPrimedRef.current = true;
+      (async () => {
+        try {
+          if (navigator.permissions?.query) {
+            const status = await navigator.permissions.query({
+              name: "microphone"
+            });
+            if (status.state === "granted") return;
+          }
+        } catch {}
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+          s.getTracks().forEach((t) => t.stop());
+        } catch {}
+      })();
     }
   };
 
@@ -552,8 +570,7 @@ function App() {
   const isProcessing = mode === "processing";
 
   let hint = null;
-  if (mode === "captured") hint = "Hold to describe what to change";
-  else if (mode === "recording")
+  if (mode === "recording")
     hint = transcript ? null : "Listening… speak your prompt";
 
   return (
@@ -571,18 +588,6 @@ function App() {
         {showFlash && <Flash />}
       </Frame>
 
-      {mode !== "live" && (
-        <TopBar>
-          <div />
-          <IconButton
-            onClick={resetToLive}
-            disabled={isProcessing}
-            aria-label="Close"
-          >
-            ×
-          </IconButton>
-        </TopBar>
-      )}
 
       {hint && (mode !== "recording" || !transcript) && (
         <HintBubble>{hint}</HintBubble>
@@ -616,6 +621,18 @@ function App() {
         <BottomRightSlot>
           <IconButton onClick={flipCamera} aria-label="Flip camera">
             <FlipIcon />
+          </IconButton>
+        </BottomRightSlot>
+      )}
+
+      {mode !== "live" && (
+        <BottomRightSlot>
+          <IconButton
+            onClick={resetToLive}
+            disabled={isProcessing}
+            aria-label="Close"
+          >
+            <XIcon />
           </IconButton>
         </BottomRightSlot>
       )}
