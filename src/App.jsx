@@ -246,12 +246,13 @@ function App() {
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
-  const [cameraCount, setCameraCount] = useState(0);
+  const [hasFacingControl, setHasFacingControl] = useState(false);
   const [showFlash, setShowFlash] = useState(false);
 
-  // Mirror when the front camera is selected, or when there's only one
-  // camera (typical of a desktop webcam, which faces the user).
-  const isMirrored = facing === "user" || cameraCount === 1;
+  // Mirror when the camera is user-facing. If the device can't report a
+  // facingMode at all, it's a desktop webcam pointing at the user — mirror
+  // it like a selfie view.
+  const isMirrored = !hasFacingControl || facing === "user";
 
   // Start / restart camera
   const startCamera = useCallback(async (mode) => {
@@ -274,15 +275,17 @@ function App() {
         await videoRef.current.play().catch(() => {});
       }
 
-      // Now that permission is granted, we can count the video inputs.
-      // Before permission, browsers report devices but with empty labels;
-      // counts are still accurate, but we wait until after success so we
-      // never count phantom devices on browsers that hide them pre-grant.
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const count = devices.filter((d) => d.kind === "videoinput").length;
-        setCameraCount(count);
-      } catch {}
+      // Detect whether this device actually has a flippable camera. Only
+      // mobile front/back cameras report a `facingMode` in track settings;
+      // desktop webcams (and virtual cameras like Continuity, OBS, etc.)
+      // don't. This is more reliable than counting videoinput devices.
+      const track = stream.getVideoTracks()[0];
+      const settings = track?.getSettings?.() || {};
+      const caps = track?.getCapabilities?.() || {};
+      const supportsFacing =
+        !!settings.facingMode ||
+        (Array.isArray(caps.facingMode) && caps.facingMode.length > 0);
+      setHasFacingControl(supportsFacing);
     } catch (err) {
       console.error(err);
       setError("Couldn't open the camera. Check permissions.");
@@ -494,7 +497,7 @@ function App() {
       <TopBar>
         <div />
         {mode === "live" ? (
-          cameraCount > 1 ? (
+          hasFacingControl ? (
             <TopButton onClick={flipCamera}>Flip</TopButton>
           ) : (
             <div />
