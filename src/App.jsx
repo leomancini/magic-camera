@@ -311,20 +311,29 @@ function App() {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
 
+    // Downsample to keep the request payload (and Poe round-trip) small.
+    // 1024px on the long edge is plenty of detail for image-to-image edits.
+    const MAX_DIM = 1024;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const scale = Math.min(1, MAX_DIM / Math.max(vw, vh));
+    const w = Math.round(vw * scale);
+    const h = Math.round(vh * scale);
+
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext("2d");
 
     // Mirror the captured frame too if displayed mirrored, so the saved
     // image matches what the user saw on screen.
     if (isMirrored) {
-      ctx.translate(canvas.width, 0);
+      ctx.translate(w, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, w, h);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
     setPhoto(dataUrl);
     setMode("captured");
     setShowFlash(true);
