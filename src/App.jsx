@@ -10,10 +10,10 @@ const Stage = styled.div`
 
 const Frame = styled.div`
   position: absolute;
-  top: max(env(safe-area-inset-top), 12px);
-  left: 12px;
-  right: 12px;
-  bottom: calc(max(env(safe-area-inset-bottom), 24px) + 130px);
+  top: max(env(safe-area-inset-top), 4px);
+  left: 4px;
+  right: 4px;
+  bottom: max(env(safe-area-inset-bottom), 4px);
   border-radius: 28px;
   overflow: hidden;
   background: #111;
@@ -47,11 +47,6 @@ const TopBar = styled.div`
   justify-content: space-between;
   align-items: center;
   z-index: 5;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.55),
-    rgba(0, 0, 0, 0)
-  );
   pointer-events: none;
 `;
 
@@ -89,12 +84,23 @@ const ControlBar = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 20px 24px max(env(safe-area-inset-bottom), 28px);
+  padding: 20px 32px calc(max(env(safe-area-inset-bottom), 28px) + 12px);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 32px;
   z-index: 6;
+`;
+
+const BottomRightSlot = styled.div`
+  position: absolute;
+  right: 32px;
+  bottom: calc(max(env(safe-area-inset-bottom), 28px) + 12px);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  /* Vertically center against the 84px shutter */
+  height: 84px;
 `;
 
 const Shutter = styled.button`
@@ -565,22 +571,18 @@ function App() {
         {showFlash && <Flash />}
       </Frame>
 
-      <TopBar>
-        <div />
-        {mode === "live" ? (
-          hasFacingControl ? (
-            <IconButton onClick={flipCamera} aria-label="Flip camera">
-              <FlipIcon />
-            </IconButton>
-          ) : (
-            <div />
-          )
-        ) : (
-          <IconButton onClick={resetToLive} disabled={isProcessing} aria-label="Close">
+      {mode !== "live" && (
+        <TopBar>
+          <div />
+          <IconButton
+            onClick={resetToLive}
+            disabled={isProcessing}
+            aria-label="Close"
+          >
             ×
           </IconButton>
-        )}
-      </TopBar>
+        </TopBar>
+      )}
 
       {hint && (mode !== "recording" || !transcript) && (
         <HintBubble>{hint}</HintBubble>
@@ -609,6 +611,14 @@ function App() {
           <Shutter onClick={resetToLive} aria-label="Take another" />
         )}
       </ControlBar>
+
+      {mode === "live" && hasFacingControl && (
+        <BottomRightSlot>
+          <IconButton onClick={flipCamera} aria-label="Flip camera">
+            <FlipIcon />
+          </IconButton>
+        </BottomRightSlot>
+      )}
 
       {isProcessing && (
         <LoadingOverlay>
