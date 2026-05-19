@@ -284,7 +284,6 @@ function App() {
   const transcriptRef = useRef("");
   const facingRef = useRef("environment");
   const submittingRef = useRef(false);
-  const micPrimedRef = useRef(false);
 
   const [mode, setMode] = useState("live");
   const [photo, setPhoto] = useState(null); // base64 data URL of captured frame
@@ -387,20 +386,6 @@ function App() {
     // Pause the live stream to save battery while reviewing
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
-    }
-
-    // Pre-warm the microphone permission so the very first press of the
-    // mic button doesn't lose the start of the prompt to the permission
-    // prompt. We don't keep the stream — we just need the grant.
-    if (!micPrimedRef.current) {
-      micPrimedRef.current = true;
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((s) => s.getTracks().forEach((t) => t.stop()))
-        .catch(() => {
-          // User denied or browser blocked — leave the ref true so we
-          // don't pester them again. They'll see an error when they press.
-        });
     }
   };
 
