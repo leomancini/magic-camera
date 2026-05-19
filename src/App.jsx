@@ -8,6 +8,17 @@ const Stage = styled.div`
   overflow: hidden;
 `;
 
+const Frame = styled.div`
+  position: absolute;
+  top: max(env(safe-area-inset-top), 12px);
+  left: 12px;
+  right: 12px;
+  bottom: calc(max(env(safe-area-inset-bottom), 24px) + 130px);
+  border-radius: 28px;
+  overflow: hidden;
+  background: #111;
+`;
+
 const Video = styled.video`
   position: absolute;
   inset: 0;
@@ -44,26 +55,7 @@ const TopBar = styled.div`
   pointer-events: none;
 `;
 
-const TopButton = styled.button`
-  pointer-events: auto;
-  appearance: none;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 14px;
-  border-radius: 999px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-`;
-
-const CloseButton = styled.button`
+const IconButton = styled.button`
   pointer-events: auto;
   appearance: none;
   border: none;
@@ -86,6 +78,10 @@ const CloseButton = styled.button`
     opacity: 0.4;
     cursor: default;
   }
+  svg {
+    width: 22px;
+    height: 22px;
+  }
 `;
 
 const ControlBar = styled.div`
@@ -106,24 +102,17 @@ const Shutter = styled.button`
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  border: 4px solid #fff;
-  background: transparent;
-  padding: 4px;
+  border: none;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.08s ease;
+  transition: transform 0.08s ease, background 0.12s ease;
   &:active {
     transform: scale(0.94);
+    background: rgba(255, 255, 255, 0.32);
   }
-`;
-
-const ShutterInner = styled.div`
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: #fff;
 `;
 
 const pulse = keyframes`
@@ -255,6 +244,15 @@ const MicIcon = () => (
   </svg>
 );
 
+const FlipIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" />
+    <polyline points="21 3 21 8 16 8" />
+    <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" />
+    <polyline points="3 21 3 16 8 16" />
+  </svg>
+);
+
 // Mode machine: 'live' -> 'captured' -> 'recording' -> 'processing' -> 'result'
 // 'result' returns to 'live' on close.
 
@@ -264,10 +262,11 @@ function App() {
   const recognitionRef = useRef(null);
   const transcriptRef = useRef("");
   const facingRef = useRef("environment");
+  const submittingRef = useRef(false);
+  const micPrimedRef = useRef(false);
 
   const [mode, setMode] = useState("live");
   const [photo, setPhoto] = useState(null); // base64 data URL of captured frame
-  const [resultImage, setResultImage] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
@@ -368,11 +367,24 @@ function App() {
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
     }
+
+    // Pre-warm the microphone permission so the very first press of the
+    // mic button doesn't lose the start of the prompt to the permission
+    // prompt. We don't keep the stream — we just need the grant.
+    if (!micPrimedRef.current) {
+      micPrimedRef.current = true;
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((s) => s.getTracks().forEach((t) => t.stop()))
+        .catch(() => {
+          // User denied or browser blocked — leave the ref true so we
+          // don't pester them again. They'll see an error when they press.
+        });
+    }
   };
 
   const resetToLive = () => {
     setPhoto(null);
-    setResultImage(null);
     setTranscript("");
     transcriptRef.current = "";
     setError(null);
@@ -444,6 +456,12 @@ function App() {
   };
 
   const stopRecordingAndTransform = async () => {
+    // Guard against double-submission: pointerup and pointerleave can both
+    // fire on release, and both would otherwise pass the mode check below
+    // before any setMode("processing") had taken effect.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const rec = recognitionRef.current;
     if (rec) {
       try {
@@ -460,6 +478,7 @@ function App() {
       setError("Didn't catch that. Try again.");
       setMode("captured");
       setTranscript("");
+      submittingRef.current = false;
       return;
     }
 
@@ -475,13 +494,30 @@ function App() {
       if (!res.ok) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
-      setResultImage(data.image);
-      setPhoto(data.image); // replace the photo with the new image
+
+      // Decode the new image before swapping the photo, so the previous
+      // frame doesn't flash through while the new data URL paints.
+      const preload = new Image();
+      preload.src = data.image;
+      try {
+        if (preload.decode) await preload.decode();
+        else
+          await new Promise((res, rej) => {
+            preload.onload = res;
+            preload.onerror = rej;
+          });
+      } catch {
+        // If decode fails we still try to render — worst case is the brief flash
+      }
+
+      setPhoto(data.image);
       setMode("result");
     } catch (err) {
       console.error(err);
       setError(err.message || "Something went wrong.");
       setMode("captured");
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -513,33 +549,36 @@ function App() {
   if (mode === "captured") hint = "Hold to describe what to change";
   else if (mode === "recording")
     hint = transcript ? null : "Listening… speak your prompt";
-  else if (mode === "result") hint = "Tap × to take another";
 
   return (
     <Stage>
-      <Video
-        ref={videoRef}
-        playsInline
-        muted
-        autoPlay
-        $mirror={isMirrored}
-        style={{ visibility: isLive ? "visible" : "hidden" }}
-      />
-      {showPhoto && photo && <Photo src={photo} alt="captured" />}
-      {showFlash && <Flash />}
+      <Frame>
+        <Video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          $mirror={isMirrored}
+          style={{ visibility: isLive ? "visible" : "hidden" }}
+        />
+        {showPhoto && photo && <Photo src={photo} alt="captured" />}
+        {showFlash && <Flash />}
+      </Frame>
 
       <TopBar>
         <div />
         {mode === "live" ? (
           hasFacingControl ? (
-            <TopButton onClick={flipCamera}>Flip</TopButton>
+            <IconButton onClick={flipCamera} aria-label="Flip camera">
+              <FlipIcon />
+            </IconButton>
           ) : (
             <div />
           )
         ) : (
-          <CloseButton onClick={resetToLive} disabled={isProcessing} aria-label="Close">
+          <IconButton onClick={resetToLive} disabled={isProcessing} aria-label="Close">
             ×
-          </CloseButton>
+          </IconButton>
         )}
       </TopBar>
 
@@ -552,9 +591,7 @@ function App() {
 
       <ControlBar>
         {mode === "live" && (
-          <Shutter onClick={capturePhoto} aria-label="Take photo">
-            <ShutterInner />
-          </Shutter>
+          <Shutter onClick={capturePhoto} aria-label="Take photo" />
         )}
         {(mode === "captured" || mode === "recording") && (
           <Mic
@@ -569,9 +606,7 @@ function App() {
           </Mic>
         )}
         {mode === "result" && (
-          <Shutter onClick={resetToLive} aria-label="Take another">
-            <ShutterInner />
-          </Shutter>
+          <Shutter onClick={resetToLive} aria-label="Take another" />
         )}
       </ControlBar>
 
