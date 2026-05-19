@@ -14,9 +14,13 @@ const Frame = styled.div`
   left: 4px;
   right: 4px;
   bottom: max(env(safe-area-inset-bottom), 4px);
-  border-radius: 28px;
+  border-radius: 12px;
   overflow: hidden;
-  background: #111;
+  background: #000;
+
+  @media (pointer: coarse) {
+    border-radius: 36px;
+  }
 `;
 
 const Video = styled.video`

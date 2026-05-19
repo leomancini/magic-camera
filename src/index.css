@@ -1,3 +1,8 @@
+html {
+  color-scheme: dark;
+  background: #000;
+}
+
 html,
 body,
 #root {
