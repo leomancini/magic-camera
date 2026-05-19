@@ -33,12 +33,31 @@ const Video = styled.video`
   transform: ${(p) => (p.$mirror ? "scaleX(-1)" : "none")};
 `;
 
-const Photo = styled.img`
+const PhotoStack = styled.div`
+  position: absolute;
+  inset: 0;
+  touch-action: pan-y;
+  cursor: grab;
+  &:active {
+    cursor: grabbing;
+  }
+`;
+
+const PhotoSlide = styled.img`
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: translate3d(
+    calc(${(p) => (p.$viewIndex - p.$index) * 100}% + ${(p) => p.$dragX}px),
+    0,
+    0
+  );
+  transition: ${(p) =>
+    p.$dragging ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)"};
+  will-change: transform;
+  pointer-events: none;
 `;
 
 const IconButton = styled.button`
@@ -275,7 +294,11 @@ function App() {
   const micPrimedRef = useRef(false);
 
   const [mode, setMode] = useState("live");
-  const [photo, setPhoto] = useState(null); // base64 data URL of captured frame
+  const [history, setHistory] = useState([]); // list of image URLs / data URLs
+  const [viewIndex, setViewIndex] = useState(0);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, pointerId: null });
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
@@ -367,7 +390,9 @@ function App() {
     ctx.drawImage(video, 0, 0, w, h);
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-    setPhoto(dataUrl);
+    setHistory([dataUrl]);
+    setViewIndex(0);
+    setDragX(0);
     setMode("captured");
     setShowFlash(true);
     setTimeout(() => setShowFlash(false), 400);
@@ -402,7 +427,10 @@ function App() {
   };
 
   const resetToLive = () => {
-    setPhoto(null);
+    setHistory([]);
+    setViewIndex(0);
+    setDragX(0);
+    setIsDragging(false);
     setTranscript("");
     transcriptRef.current = "";
     setError(null);
@@ -503,10 +531,11 @@ function App() {
     setMode("processing");
 
     try {
+      const sourceImage = history[viewIndex];
       const res = await fetch("/api/transform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: photo, prompt: finalPrompt })
+        body: JSON.stringify({ image: sourceImage, prompt: finalPrompt })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -514,7 +543,7 @@ function App() {
       }
 
       // Decode the new image before swapping the photo, so the previous
-      // frame doesn't flash through while the new data URL paints.
+      // frame doesn't flash through while the new url paints.
       const preload = new Image();
       preload.src = data.image;
       try {
@@ -524,11 +553,11 @@ function App() {
             preload.onload = res;
             preload.onerror = rej;
           });
-      } catch {
-        // If decode fails we still try to render — worst case is the brief flash
-      }
+      } catch {}
 
-      setPhoto(data.image);
+      setHistory((h) => [...h, data.image]);
+      setViewIndex((i) => i + 1);
+      setDragX(0);
       setMode("result");
     } catch (err) {
       console.error(err);
@@ -542,7 +571,7 @@ function App() {
   // Press-and-hold handlers for the mic button
   const onMicDown = (e) => {
     e.preventDefault();
-    if (mode === "captured") {
+    if (mode === "captured" || mode === "result") {
       startRecording();
     }
   };
@@ -558,8 +587,55 @@ function App() {
     }
   };
 
+  // --- Swipe through photo history ---
+  const canSwipe = mode !== "live" && mode !== "processing" && history.length > 1;
+
+  const onSwipeDown = (e) => {
+    if (!canSwipe) return;
+    if (isDragging) return;
+    dragStartRef.current = { x: e.clientX, pointerId: e.pointerId };
+    setIsDragging(true);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const onSwipeMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    // Older photos are positioned to the right of the current one and newer
+    // to the left, so a leftward drag (negative dx) reveals older history.
+    // Apply rubber-band resistance at the ends.
+    let clamped = dx;
+    const atOldest = viewIndex === 0;
+    const atNewest = viewIndex === history.length - 1;
+    if ((atOldest && dx < 0) || (atNewest && dx > 0)) {
+      clamped = dx * 0.25;
+    }
+    setDragX(clamped);
+  };
+
+  const onSwipeUp = (e) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+    const width = e.currentTarget.offsetWidth || window.innerWidth;
+    const threshold = width * 0.2;
+    const dx = e.clientX - dragStartRef.current.x;
+    if (dx < -threshold && viewIndex > 0) {
+      // Dragged left → reveal an older image (lower index).
+      setViewIndex(viewIndex - 1);
+    } else if (dx > threshold && viewIndex < history.length - 1) {
+      // Dragged right → return to a newer image (higher index).
+      setViewIndex(viewIndex + 1);
+    }
+    setDragX(0);
+  };
+
   const isLive = mode === "live";
-  const showPhoto = mode !== "live";
+  const showPhoto = mode !== "live" && history.length > 0;
   const isRecording = mode === "recording";
   const isProcessing = mode === "processing";
 
@@ -574,7 +650,27 @@ function App() {
           $mirror={isMirrored}
           style={{ visibility: isLive ? "visible" : "hidden" }}
         />
-        {showPhoto && photo && <Photo src={photo} alt="captured" />}
+        {showPhoto && (
+          <PhotoStack
+            onPointerDown={onSwipeDown}
+            onPointerMove={onSwipeMove}
+            onPointerUp={onSwipeUp}
+            onPointerCancel={onSwipeUp}
+          >
+            {history.map((url, i) => (
+              <PhotoSlide
+                key={i}
+                src={url}
+                alt=""
+                draggable={false}
+                $index={i}
+                $viewIndex={viewIndex}
+                $dragX={dragX}
+                $dragging={isDragging}
+              />
+            ))}
+          </PhotoStack>
+        )}
         {showFlash && <Flash />}
       </Frame>
 
@@ -589,7 +685,7 @@ function App() {
             <ShutterDot />
           </Shutter>
         )}
-        {(mode === "captured" || mode === "recording") && (
+        {mode !== "live" && (
           <Mic
             $recording={isRecording}
             onPointerDown={onMicDown}
@@ -600,9 +696,6 @@ function App() {
           >
             <MicDot $recording={isRecording} />
           </Mic>
-        )}
-        {mode === "result" && (
-          <Shutter onClick={resetToLive} aria-label="Take another" />
         )}
       </ControlBar>
 
