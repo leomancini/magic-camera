@@ -246,7 +246,12 @@ function App() {
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
+  const [cameraCount, setCameraCount] = useState(0);
   const [showFlash, setShowFlash] = useState(false);
+
+  // Mirror when the front camera is selected, or when there's only one
+  // camera (typical of a desktop webcam, which faces the user).
+  const isMirrored = facing === "user" || cameraCount === 1;
 
   // Start / restart camera
   const startCamera = useCallback(async (mode) => {
@@ -268,6 +273,16 @@ function App() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => {});
       }
+
+      // Now that permission is granted, we can count the video inputs.
+      // Before permission, browsers report devices but with empty labels;
+      // counts are still accurate, but we wait until after success so we
+      // never count phantom devices on browsers that hide them pre-grant.
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const count = devices.filter((d) => d.kind === "videoinput").length;
+        setCameraCount(count);
+      } catch {}
     } catch (err) {
       console.error(err);
       setError("Couldn't open the camera. Check permissions.");
@@ -300,7 +315,7 @@ function App() {
 
     // Mirror the captured frame too if displayed mirrored, so the saved
     // image matches what the user saw on screen.
-    if (facingRef.current === "user") {
+    if (isMirrored) {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
@@ -470,7 +485,7 @@ function App() {
         playsInline
         muted
         autoPlay
-        $mirror={facing === "user"}
+        $mirror={isMirrored}
         style={{ visibility: isLive ? "visible" : "hidden" }}
       />
       {showPhoto && photo && <Photo src={photo} alt="captured" />}
@@ -479,7 +494,11 @@ function App() {
       <TopBar>
         <div />
         {mode === "live" ? (
-          <TopButton onClick={flipCamera}>Flip</TopButton>
+          cameraCount > 1 ? (
+            <TopButton onClick={flipCamera}>Flip</TopButton>
+          ) : (
+            <div />
+          )
         ) : (
           <TopButton onClick={resetToLive} disabled={isProcessing}>
             ×

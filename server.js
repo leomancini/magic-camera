@@ -10,7 +10,7 @@ const app = express();
 const port = 3135;
 
 const POE_API_KEY = process.env.POE_API_KEY;
-const POE_MODEL = "nano-banana";
+const POE_MODEL = "nano-banana-2";
 
 app.use(express.json({ limit: "25mb" }));
 app.use(express.static(join(__dirname, "dist")));
