@@ -98,22 +98,10 @@ app.post("/api/transform", async (req, res) => {
       return res.status(502).json({ error: "No image in Poe response" });
     }
 
-    // If it's already a data URL, return as-is. Otherwise fetch and convert
-    // to base64 so the client doesn't have to deal with cross-origin / expiring URLs.
-    if (imageUrl.startsWith("data:")) {
-      return res.json({ image: imageUrl });
-    }
-
-    const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) {
-      return res
-        .status(502)
-        .json({ error: `Failed to fetch generated image: ${imgRes.status}` });
-    }
-    const buf = Buffer.from(await imgRes.arrayBuffer());
-    const contentType = imgRes.headers.get("content-type") || "image/png";
-    const dataUrl = `data:${contentType};base64,${buf.toString("base64")}`;
-    res.json({ image: dataUrl });
+    // Return whatever URL Poe gave us (CDN URL or data URL). Letting the
+    // browser fetch from Poe's CDN directly skips a server-side download
+    // and a base64 round-trip — meaningful win on perceived latency.
+    res.json({ image: imageUrl });
   } catch (error) {
     console.error("Transform error:", error);
     res.status(500).json({ error: error.message });
