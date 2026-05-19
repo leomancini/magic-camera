@@ -58,7 +58,7 @@ const IconButton = styled.button`
   pointer-events: auto;
   appearance: none;
   border: none;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   color: #fff;
   width: 44px;
   height: 44px;
@@ -71,8 +71,13 @@ const IconButton = styled.button`
   line-height: 1;
   padding: 0;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  transition: background 0.12s ease, transform 0.08s ease;
+  &:active {
+    transform: scale(0.94);
+    background: rgba(0, 0, 0, 0.65);
+  }
   &:disabled {
     opacity: 0.4;
     cursor: default;
@@ -114,14 +119,14 @@ const Shutter = styled.button`
   border-radius: 50%;
   border: none;
   padding: 0;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   cursor: pointer;
   transition: transform 0.08s ease, background 0.12s ease;
   &:active {
     transform: scale(0.94);
-    background: rgba(255, 255, 255, 0.32);
+    background: rgba(0, 0, 0, 0.65);
   }
 `;
 
@@ -135,8 +140,14 @@ const Mic = styled.button`
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  border: 4px solid #fff;
-  background: ${(p) => (p.$recording ? "#ff3b3b" : "rgba(255,255,255,0.12)")};
+  border: none;
+  padding: 0;
+  background: ${(p) =>
+    p.$recording ? "#ff3b3b" : "rgba(0, 0, 0, 0.5)"};
+  backdrop-filter: ${(p) =>
+    p.$recording ? "none" : "blur(24px) saturate(160%)"};
+  -webkit-backdrop-filter: ${(p) =>
+    p.$recording ? "none" : "blur(24px) saturate(160%)"};
   color: #fff;
   display: flex;
   align-items: center;
@@ -151,7 +162,7 @@ const Mic = styled.button`
       animation: ${pulse} 1.1s ease-out infinite;
     `}
   &:active {
-    transform: scale(0.96);
+    transform: scale(0.94);
   }
   svg {
     width: 38px;
