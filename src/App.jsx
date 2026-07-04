@@ -60,6 +60,12 @@ const PhotoUnder = styled.img`
   pointer-events: none;
 `;
 
+const blurPulse = keyframes`
+  0% { filter: blur(4px); }
+  50% { filter: blur(32px); }
+  100% { filter: blur(4px); }
+`;
+
 const PhotoReveal = styled.img`
   position: absolute;
   inset: 0;
@@ -73,14 +79,21 @@ const PhotoReveal = styled.img`
       ? `inset(0 0 0 ${p.$dragX}px)`
       : "inset(0 0 0 0)"};
   filter: ${(p) => (p.$blur ? `blur(${p.$blur}px)` : "none")};
+  transform: scale(${(p) => p.$scale || 1});
+  ${(p) =>
+    p.$processing &&
+    css`
+      animation: ${blurPulse} 3.2s ease-in-out infinite;
+    `}
   transition: ${(p) =>
     [
       p.$dragging ? null : "clip-path 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
-      p.$blurAnim ? `filter ${p.$blurAnim}` : null
+      p.$blurAnim ? `filter ${p.$blurAnim}` : null,
+      p.$scaleAnim ? `transform ${p.$scaleAnim}` : null
     ]
       .filter(Boolean)
       .join(", ") || "none"};
-  will-change: clip-path, filter;
+  will-change: clip-path, filter, transform;
   pointer-events: none;
 `;
 
@@ -402,7 +415,9 @@ function App() {
   const settleTimerRef = useRef(null);
   const photoRef = useRef(null);
   const [blurPx, setBlurPx] = useState(0);
-  const [blurAnim, setBlurAnim] = useState(null); // e.g. "12s ease-out"
+  const [blurAnim, setBlurAnim] = useState(null); // e.g. "1.6s ease-out"
+  const [scale, setScale] = useState(1);
+  const [scaleAnim, setScaleAnim] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
@@ -562,6 +577,17 @@ function App() {
     setShowFlash(true);
     setTimeout(() => setShowFlash(false), 400);
 
+    // Push in a bit on capture; the zoom releases when a generated photo
+    // arrives.
+    setScaleAnim(null);
+    setScale(1);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setScaleAnim("0.7s ease-out");
+        setScale(1.06);
+      })
+    );
+
     // Pause the live stream to save battery while reviewing
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
@@ -602,6 +628,8 @@ function App() {
     setIsDragging(false);
     setBlurAnim(null);
     setBlurPx(0);
+    setScaleAnim(null);
+    setScale(1);
     setTranscript("");
     transcriptRef.current = "";
     setError(null);
@@ -701,16 +729,11 @@ function App() {
 
     setMode("processing");
 
-    // Blur the source photo while we wait: jump to 8px, then drift up
-    // toward 24px over the course of the generation.
-    setBlurAnim(null);
-    setBlurPx(8);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        setBlurAnim("12s ease-out");
-        setBlurPx(24);
-      })
-    );
+    // While processing, the photo's blur oscillates via the blurPulse
+    // animation. Also ease into the zoomed-in state in case we're iterating
+    // on a result that had already zoomed back out.
+    setScaleAnim("2.5s ease-out");
+    setScale(1.06);
 
     try {
       const sourceImage = history[viewIndex];
@@ -737,18 +760,22 @@ function App() {
           });
       } catch {}
 
-      // Hand the blur off to the new photo: sample whatever blur level the
-      // in-flight animation reached, show the result at that same blur,
-      // then ease it down to sharp.
-      let handoffBlur = 24;
+      // Hand the effects off to the new photo: sample whatever blur/zoom
+      // the in-flight animations reached, show the result at those exact
+      // levels, then ease both down to sharp and unzoomed.
+      let handoffBlur = 18;
+      let handoffScale = 1.06;
       if (photoRef.current) {
-        const m = /blur\(([\d.]+)px\)/.exec(
-          getComputedStyle(photoRef.current).filter
-        );
+        const style = getComputedStyle(photoRef.current);
+        const m = /blur\(([\d.]+)px\)/.exec(style.filter);
         if (m) handoffBlur = parseFloat(m[1]);
+        const t = /matrix\(([\d.\-]+),/.exec(style.transform);
+        if (t) handoffScale = parseFloat(t[1]);
       }
       setBlurAnim(null);
       setBlurPx(handoffBlur);
+      setScaleAnim(null);
+      setScale(handoffScale);
 
       // Always jump to the newly generated photo, even if the user was
       // viewing an older one in the history when they spoke.
@@ -761,6 +788,8 @@ function App() {
         requestAnimationFrame(() => {
           setBlurAnim("1.6s ease-out");
           setBlurPx(0);
+          setScaleAnim("1.6s ease-out");
+          setScale(1);
         })
       );
     } catch (err) {
@@ -950,6 +979,9 @@ function App() {
               $dragging={isDragging}
               $blur={blurPx}
               $blurAnim={blurAnim}
+              $scale={scale}
+              $scaleAnim={scaleAnim}
+              $processing={isProcessing}
             />
             {dragX !== 0 && (
               <RevealDivider
