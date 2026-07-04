@@ -5,7 +5,9 @@ const Stage = styled.div`
   position: fixed;
   inset: 0;
   background: #000;
-  overflow: hidden;
+  /* In standalone the frame intentionally overhangs the bottom of the
+     layout viewport (see Frame) — don't clip it. */
+  overflow: ${(p) => (p.$standalone ? "visible" : "hidden")};
 `;
 
 const Frame = styled.div`
@@ -21,7 +23,14 @@ const Frame = styled.div`
   ${(p) =>
     p.$standalone
       ? css`
-          inset: 0;
+          /* iOS standalone lays out the fixed viewport ABOVE the
+             home-indicator area while env() still reports the inset, so
+             bottom: 0 stops short of the physical screen bottom — extend
+             past the viewport by that inset to truly reach it. */
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
@@ -940,7 +949,7 @@ function App() {
       : null;
 
   return (
-    <Stage>
+    <Stage $standalone={isStandalone}>
       <Frame $standalone={isStandalone}>
         <Video
           ref={videoRef}
