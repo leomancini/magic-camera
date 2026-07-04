@@ -683,6 +683,18 @@ function App() {
       rec.start();
       recognitionRef.current = rec;
       setMode("recording");
+
+      // Ease into the zoom as soon as recording starts. It doubles as
+      // bleed compensation while the photo blurs during processing:
+      // Gaussian blur samples past the element's edges, leaving a faded
+      // border unless the photo is scaled up enough to push that artifact
+      // outside the frame's clip. Cover the 32px worst-case pulse (bleed
+      // on both edges) based on the frame width. Blur and zoom later ease
+      // out together, so the compensation shrinks in lockstep with the
+      // remaining blur.
+      const bleedScale = 1 + 68 / (window.innerWidth || 400);
+      setScaleAnim("1.2s ease-out");
+      setScale(Math.max(1.06, bleedScale));
     } catch (err) {
       console.error(err);
       setError("Couldn't start microphone.");
@@ -712,23 +724,13 @@ function App() {
       setError("Didn't catch that. Try again.");
       setMode("captured");
       setTranscript("");
+      setScaleAnim("0.5s ease-out");
+      setScale(1);
       submittingRef.current = false;
       return;
     }
 
     setMode("processing");
-
-    // While processing, the photo's blur oscillates via the blurPulse
-    // animation and the photo eases into a zoom, released when the result
-    // arrives. The zoom doubles as bleed compensation: Gaussian blur
-    // samples past the element's edges, leaving a faded border unless the
-    // photo is scaled up enough to push that artifact outside the frame's
-    // clip. Cover the 32px worst-case pulse (bleed on both edges) based on
-    // the frame width. Blur and zoom later ease out together, so the
-    // compensation shrinks in lockstep with the remaining blur.
-    const bleedScale = 1 + 68 / (window.innerWidth || 400);
-    setScaleAnim("1.2s ease-out");
-    setScale(Math.max(1.06, bleedScale));
 
     try {
       const sourceImage = history[viewIndex];
