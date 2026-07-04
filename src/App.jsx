@@ -942,25 +942,17 @@ function App() {
         </BottomRightSlot>
       )}
 
-      {mode !== "live" && (
+      {mode !== "live" && !isProcessing && (
         <BottomRightSlot>
-          <IconButton
-            onClick={resetToLive}
-            disabled={isProcessing}
-            aria-label="Close"
-          >
+          <IconButton onClick={resetToLive} aria-label="Close">
             <XIcon />
           </IconButton>
         </BottomRightSlot>
       )}
 
-      {mode !== "live" && history.length > 0 && (
+      {mode !== "live" && !isProcessing && history.length > 0 && (
         <BottomLeftSlot>
-          <IconButton
-            onClick={onShare}
-            disabled={isProcessing}
-            aria-label="Share photo"
-          >
+          <IconButton onClick={onShare} aria-label="Share photo">
             <ShareIcon />
           </IconButton>
         </BottomLeftSlot>
