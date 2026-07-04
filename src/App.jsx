@@ -3,10 +3,15 @@ import styled, { keyframes, css } from "styled-components";
 
 const Stage = styled.div`
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Span the true screen height: 100vh plus however far the layout
+     viewport falls short of the screen on iOS standalone (0 elsewhere).
+     Bottom-anchored children then sit relative to the real screen
+     bottom. */
+  height: calc(100vh + ${(p) => p.$shortfall || 0}px);
   background: #000;
-  /* In standalone the frame intentionally overhangs the bottom of the
-     layout viewport (see Frame) — don't clip it. */
   overflow: ${(p) => (p.$standalone ? "visible" : "hidden")};
 `;
 
@@ -23,15 +28,8 @@ const Frame = styled.div`
   ${(p) =>
     p.$standalone
       ? css`
-          /* While iOS lays out the viewport shorter than the physical
-             screen (pre-fullscreen), overhang by the measured shortfall;
-             once the Fullscreen API engages this is 0. env() is NOT used
-             here: iOS reports the device's home-indicator inset even when
-             the viewport already stops above it. */
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: ${-(p.$shortfall || 0)}px;
+          /* Full-bleed: the Stage already spans the true screen height. */
+          inset: 0;
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
@@ -420,33 +418,25 @@ const appKey = (() => {
 // the true full-screen surface — we request it on the first tap (it needs a
 // user gesture). This measures the current shortfall; it drops to 0 once
 // fullscreen engages.
+// How many CSS px 100vh actually resolves to right now.
+const measure100vh = () => {
+  const d = document.createElement("div");
+  d.style.cssText =
+    "position:fixed;top:0;left:0;width:0;height:100vh;visibility:hidden;pointer-events:none;";
+  document.body.appendChild(d);
+  const h = d.offsetHeight;
+  d.remove();
+  return h;
+};
+
+// Shortfall of 100vh vs the physical screen on iOS standalone — this is
+// what the Stage must add to truly reach the screen bottom. Self-corrects:
+// if viewport-fit=cover works and 100vh spans the screen, this is 0.
 const measureViewportShortfall = () =>
   window.navigator.standalone === true
-    ? Math.max(0, (window.screen?.height || 0) - window.innerHeight)
+    ? Math.max(0, (window.screen?.height || 0) - measure100vh())
     : 0;
 
-const isFullscreen = () =>
-  !!(document.fullscreenElement || document.webkitFullscreenElement);
-
-let fsDebug = "idle";
-
-const requestAppFullscreen = () => {
-  if (isFullscreen()) return;
-  const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (!req) {
-    fsDebug = "no-api";
-    return;
-  }
-  try {
-    fsDebug = "requested";
-    const p = req.call(el, { navigationUI: "hide" });
-    p?.then?.(() => (fsDebug = "granted"));
-    p?.catch?.((e) => (fsDebug = `rej:${e?.name || e}`));
-  } catch (e) {
-    fsDebug = `err:${e?.name || e}`;
-  }
-};
 
 // Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
 // everything else (Android, desktop) matches the display-mode media query.
@@ -466,10 +456,9 @@ function readDebugInfo() {
   const envBottom = cs.paddingBottom;
   const envTop = cs.paddingTop;
   probe.remove();
-  const el = document.documentElement;
-  return `dbg3 ns:${String(window.navigator.standalone)} fs:${isFullscreen()} fsApi:${!!(
-    el.requestFullscreen || el.webkitRequestFullscreen
-  )} fsState:${fsDebug} ih:${window.innerHeight} sh:${
+  return `dbg4 ns:${String(window.navigator.standalone)} ih:${
+    window.innerHeight
+  } vh:${measure100vh()} sh:${
     window.screen?.height
   } envT:${envTop} envB:${envBottom} short:${measureViewportShortfall()}`;
 }
@@ -534,30 +523,18 @@ function App() {
     measureViewportShortfall
   );
 
-  // Keep the shortfall current (it drops to 0 when fullscreen engages) and
-  // request fullscreen on the first tap of each non-fullscreen stretch —
-  // the API requires a user gesture, and iOS exits fullscreen when the app
-  // is backgrounded.
+  // Keep the shortfall current — iOS can settle viewport metrics a beat
+  // after launch, so re-measure on resize and shortly after mount.
   useEffect(() => {
     if (!isStandalone) return;
     const update = () => setViewportShortfall(measureViewportShortfall());
-    const onTap = () => {
-      if (measureViewportShortfall() > 0) requestAppFullscreen();
-    };
-    // touchend/click carry the user-activation grant fullscreen requires
-    // on iOS (pointerdown does not). Capture phase so preventDefault in
-    // app handlers can't starve us of the event.
     window.addEventListener("resize", update);
-    document.addEventListener("fullscreenchange", update);
-    document.addEventListener("webkitfullscreenchange", update);
-    window.addEventListener("touchend", onTap, true);
-    window.addEventListener("click", onTap, true);
+    const t1 = setTimeout(update, 300);
+    const t2 = setTimeout(update, 1500);
     return () => {
       window.removeEventListener("resize", update);
-      document.removeEventListener("fullscreenchange", update);
-      document.removeEventListener("webkitfullscreenchange", update);
-      window.removeEventListener("touchend", onTap, true);
-      window.removeEventListener("click", onTap, true);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
   }, []);
   // null = still checking; then { cam, mic } with 'granted' | 'prompt' | 'denied'
@@ -1084,8 +1061,8 @@ function App() {
       : null;
 
   return (
-    <Stage $standalone={isStandalone}>
-      <Frame $standalone={isStandalone} $shortfall={viewportShortfall}>
+    <Stage $standalone={isStandalone} $shortfall={viewportShortfall}>
+      <Frame $standalone={isStandalone}>
         <Video
           ref={videoRef}
           playsInline
