@@ -21,6 +21,16 @@ const Frame = styled.div`
   @media (pointer: coarse) {
     border-radius: 36px;
   }
+
+  /* Installed PWA: go full-bleed so the camera reaches the very top,
+     tucking under the rounded corners, and extends further down past
+     the home-indicator inset. */
+  @media (display-mode: standalone) {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
 `;
 
 const Video = styled.video`
