@@ -11,7 +11,11 @@ body,
   width: 100%;
   height: 100%;
   background: #000;
-  overflow: hidden;
+  /* NOTE: no `overflow: hidden` here — on <html> it propagates to the
+     viewport and clips fixed elements at the viewport bounds, which cut
+     off the frame's overhang into the iOS home-indicator area. The app is
+     fully position: fixed with no flowing content, so nothing scrolls
+     anyway. */
   overscroll-behavior: none;
   touch-action: manipulation;
   user-select: none;

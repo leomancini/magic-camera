@@ -16,7 +16,20 @@ const POE_MODEL = "nano-banana-2";
 const APP_KEY = process.env.APP_KEY;
 
 app.use(express.json({ limit: "25mb" }));
-app.use(express.static(join(__dirname, "dist")));
+app.use(
+  express.static(join(__dirname, "dist"), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        // Never cache the HTML shell — it references hashed bundles, and a
+        // stale shell (e.g. in an installed iOS PWA) pins stale JS/CSS.
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      } else if (filePath.includes("/assets/")) {
+        // Hashed filenames: safe to cache forever.
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    }
+  })
+);
 
 // Gate the API behind the key. Fails closed if APP_KEY isn't configured.
 app.use("/api", (req, res, next) => {
@@ -160,6 +173,7 @@ app.get("/api/image-proxy", async (req, res) => {
 });
 
 app.get("*", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.sendFile(join(__dirname, "dist", "index.html"));
 });
 
