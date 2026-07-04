@@ -23,15 +23,15 @@ const Frame = styled.div`
   ${(p) =>
     p.$standalone
       ? css`
-          /* If iOS lays out the viewport shorter than the physical screen
-             (observed with black-translucent + manifest), overhang by the
-             measured shortfall. env() is NOT used here: iOS reports the
-             device's home-indicator inset even when the viewport already
-             stops above it, so it can't distinguish overlap from gap. */
+          /* While iOS lays out the viewport shorter than the physical
+             screen (pre-fullscreen), overhang by the measured shortfall;
+             once the Fullscreen API engages this is 0. env() is NOT used
+             here: iOS reports the device's home-indicator inset even when
+             the viewport already stops above it. */
           top: 0;
           left: 0;
           right: 0;
-          bottom: ${-iosViewportShortfall}px;
+          bottom: ${-(p.$shortfall || 0)}px;
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
@@ -413,14 +413,31 @@ const appKey = (() => {
   }
 })();
 
-// On iOS home-screen apps the layout viewport ends above the home-indicator
-// area; measure exactly how far short of the physical screen it falls so the
-// frame can overhang by that amount. 0 everywhere else (desktop/Android
-// standalone windows are resizable, so this only applies to iOS).
-const iosViewportShortfall =
+// On iOS home-screen apps the layout viewport is laid out 62pt (status bar)
+// short of the physical screen, and WKWebView clips all painting outside it,
+// so part of the screen is unreachable: black-translucent leaves the gap at
+// the bottom, default at the top. The Fullscreen API is the only way to get
+// the true full-screen surface — we request it on the first tap (it needs a
+// user gesture). This measures the current shortfall; it drops to 0 once
+// fullscreen engages.
+const measureViewportShortfall = () =>
   window.navigator.standalone === true
     ? Math.max(0, (window.screen?.height || 0) - window.innerHeight)
     : 0;
+
+const isFullscreen = () =>
+  !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+const requestAppFullscreen = () => {
+  if (isFullscreen()) return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  try {
+    const p = req.call(el, { navigationUI: "hide" });
+    p?.catch?.(() => {});
+  } catch {}
+};
 
 // Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
 // everything else (Android, desktop) matches the display-mode media query.
@@ -440,11 +457,9 @@ function readDebugInfo() {
   const envBottom = cs.paddingBottom;
   const envTop = cs.paddingTop;
   probe.remove();
-  return `dbg1 ns:${String(window.navigator.standalone)} mm:${
-    window.matchMedia?.("(display-mode: standalone)")?.matches
-  } ih:${window.innerHeight} oh:${window.outerHeight} sh:${
-    window.screen?.height
-  } envT:${envTop} envB:${envBottom} short:${iosViewportShortfall}`;
+  return `dbg2 ns:${String(window.navigator.standalone)} fs:${isFullscreen()} ih:${
+    window.innerHeight
+  } sh:${window.screen?.height} envT:${envTop} envB:${envBottom} short:${measureViewportShortfall()}`;
 }
 
 const DebugReadout = styled.div`
@@ -494,6 +509,31 @@ function App() {
   const [hasFacingControl, setHasFacingControl] = useState(false);
   const [showFlash, setShowFlash] = useState(false);
   const [camReady, setCamReady] = useState(false);
+  const [viewportShortfall, setViewportShortfall] = useState(
+    measureViewportShortfall
+  );
+
+  // Keep the shortfall current (it drops to 0 when fullscreen engages) and
+  // request fullscreen on the first tap of each non-fullscreen stretch —
+  // the API requires a user gesture, and iOS exits fullscreen when the app
+  // is backgrounded.
+  useEffect(() => {
+    if (!isStandalone) return;
+    const update = () => setViewportShortfall(measureViewportShortfall());
+    const onTap = () => {
+      if (measureViewportShortfall() > 0) requestAppFullscreen();
+    };
+    window.addEventListener("resize", update);
+    document.addEventListener("fullscreenchange", update);
+    document.addEventListener("webkitfullscreenchange", update);
+    window.addEventListener("pointerdown", onTap, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      document.removeEventListener("fullscreenchange", update);
+      document.removeEventListener("webkitfullscreenchange", update);
+      window.removeEventListener("pointerdown", onTap, true);
+    };
+  }, []);
   // null = still checking; then { cam, mic } with 'granted' | 'prompt' | 'denied'
   const [perms, setPerms] = useState(null);
 
@@ -1019,7 +1059,7 @@ function App() {
 
   return (
     <Stage $standalone={isStandalone}>
-      <Frame $standalone={isStandalone}>
+      <Frame $standalone={isStandalone} $shortfall={viewportShortfall}>
         <Video
           ref={videoRef}
           playsInline
