@@ -292,6 +292,8 @@ const ProcessingDisc = styled.div`
 
 const ErrorToast = styled(TranscriptBubble)`
   color: #ff4d4d;
+  text-shadow: 0 2px 24px rgba(96, 0, 0, 0.9), 0 0 48px rgba(96, 0, 0, 0.75),
+    0 0 12px rgba(96, 0, 0, 0.6);
   pointer-events: auto;
   cursor: pointer;
   z-index: 10;
@@ -713,7 +715,7 @@ function App() {
 
     const finalPrompt = transcriptRef.current.trim();
     if (!finalPrompt) {
-      setError("Didn't catch that. Try again.");
+      // No speech detected — quietly return to the captured photo.
       setMode("captured");
       setTranscript("");
       setScaleAnim("0.5s ease-out");
