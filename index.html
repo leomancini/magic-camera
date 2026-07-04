@@ -5,11 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Magic Camera" />
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- No manifest link on purpose: with a manifest + black-translucent,
+         iOS lays out the standalone viewport 62pt short at the bottom and
+         clips painting below it. Legacy black-translucent alone gives a
+         full-height viewport under both the status bar and home indicator.
+         (manifest.webmanifest is still served for future use.) -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
