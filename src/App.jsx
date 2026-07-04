@@ -26,14 +26,14 @@ const Frame = styled.div`
           /* iOS standalone lays out the fixed viewport ABOVE the
              home-indicator area — and reports env(safe-area-inset-bottom)
              as 0 there — so bottom: 0 stops short of the physical screen
-             bottom. Overhang by at least the 34pt home-indicator height on
-             iOS home-screen apps to truly reach it. */
+             bottom. Overhang by the measured shortfall between the screen
+             and the layout viewport to truly reach it. */
           top: 0;
           left: 0;
           right: 0;
-          bottom: ${window.navigator.standalone === true
-            ? "calc(-1 * max(env(safe-area-inset-bottom, 0px), 34px))"
-            : "calc(-1 * env(safe-area-inset-bottom, 0px))"};
+          bottom: calc(
+            -1 * max(env(safe-area-inset-bottom, 0px), ${iosViewportShortfall}px)
+          );
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
@@ -410,6 +410,15 @@ const appKey = (() => {
     return "";
   }
 })();
+
+// On iOS home-screen apps the layout viewport ends above the home-indicator
+// area; measure exactly how far short of the physical screen it falls so the
+// frame can overhang by that amount. 0 everywhere else (desktop/Android
+// standalone windows are resizable, so this only applies to iOS).
+const iosViewportShortfall =
+  window.navigator.standalone === true
+    ? Math.max(0, (window.screen?.height || 0) - window.innerHeight)
+    : 0;
 
 // Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
 // everything else (Android, desktop) matches the display-mode media query.
