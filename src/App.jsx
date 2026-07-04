@@ -23,17 +23,15 @@ const Frame = styled.div`
   ${(p) =>
     p.$standalone
       ? css`
-          /* iOS standalone lays out the fixed viewport ABOVE the
-             home-indicator area — and reports env(safe-area-inset-bottom)
-             as 0 there — so bottom: 0 stops short of the physical screen
-             bottom. Overhang by the measured shortfall between the screen
-             and the layout viewport to truly reach it. */
+          /* If iOS lays out the viewport shorter than the physical screen
+             (observed with black-translucent + manifest), overhang by the
+             measured shortfall. env() is NOT used here: iOS reports the
+             device's home-indicator inset even when the viewport already
+             stops above it, so it can't distinguish overlap from gap. */
           top: 0;
           left: 0;
           right: 0;
-          bottom: calc(
-            -1 * max(env(safe-area-inset-bottom, 0px), ${iosViewportShortfall}px)
-          );
+          bottom: ${-iosViewportShortfall}px;
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
