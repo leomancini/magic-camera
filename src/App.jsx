@@ -145,8 +145,8 @@ const BottomRightSlot = styled.div`
   z-index: 7;
   display: flex;
   align-items: center;
-  /* Vertically center against the 72px shutter */
-  height: 72px;
+  /* Vertically center against the 76px shutter */
+  height: 76px;
 `;
 
 const BottomLeftSlot = styled.div`
@@ -157,13 +157,13 @@ const BottomLeftSlot = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
-  height: 72px;
+  height: 76px;
 `;
 
 const Shutter = styled.button`
   appearance: none;
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   border: none;
   padding: 0;
@@ -182,8 +182,8 @@ const Shutter = styled.button`
 `;
 
 const ShutterDot = styled.div`
-  width: 62px;
-  height: 62px;
+  width: 66px;
+  height: 66px;
   border-radius: 50%;
   background: #fff;
 `;
@@ -195,8 +195,8 @@ const pulse = keyframes`
 
 const Mic = styled.button`
   appearance: none;
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   border: none;
   padding: 0;
@@ -222,8 +222,8 @@ const Mic = styled.button`
 `;
 
 const MicDot = styled.div`
-  width: ${(p) => (p.$recording ? "32px" : "62px")};
-  height: ${(p) => (p.$recording ? "32px" : "62px")};
+  width: ${(p) => (p.$recording ? "32px" : "66px")};
+  height: ${(p) => (p.$recording ? "32px" : "66px")};
   border-radius: ${(p) => (p.$recording ? "8px" : "50%")};
   background: #ff3b3b;
   transition: width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
@@ -260,8 +260,8 @@ const Spinner = styled.div`
 `;
 
 const ProcessingDisc = styled.div`
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(24px) saturate(160%);
