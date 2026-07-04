@@ -108,6 +108,43 @@ app.post("/api/transform", async (req, res) => {
   }
 });
 
+// Proxy generated images back through this origin so the client can fetch
+// their bytes (for Web Share API file payload / download fallback) without
+// running into the upstream CDN's CORS rules.
+app.get("/api/image-proxy", async (req, res) => {
+  try {
+    const target = req.query.url;
+    if (typeof target !== "string" || !target) {
+      return res.status(400).json({ error: "Missing url" });
+    }
+    // Allow only Poe's image CDN to keep this from becoming an open proxy.
+    let parsed;
+    try {
+      parsed = new URL(target);
+    } catch {
+      return res.status(400).json({ error: "Invalid url" });
+    }
+    if (!parsed.host.endsWith(".poecdn.net")) {
+      return res.status(403).json({ error: "Host not allowed" });
+    }
+
+    const upstream = await fetch(target);
+    if (!upstream.ok) {
+      return res.status(502).json({ error: `Upstream ${upstream.status}` });
+    }
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader(
+      "Content-Type",
+      upstream.headers.get("content-type") || "image/jpeg"
+    );
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(buf);
+  } catch (err) {
+    console.error("image-proxy error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("*", (req, res) => {
   res.sendFile(join(__dirname, "dist", "index.html"));
 });

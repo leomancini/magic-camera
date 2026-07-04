@@ -43,21 +43,44 @@ const PhotoStack = styled.div`
   }
 `;
 
-const PhotoSlide = styled.img`
+const PhotoUnder = styled.img`
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: translate3d(
-    calc(${(p) => (p.$viewIndex - p.$index) * 100}% + ${(p) => p.$dragX}px),
-    0,
-    0
-  );
-  transition: ${(p) =>
-    p.$dragging ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)"};
-  will-change: transform;
   pointer-events: none;
+`;
+
+const PhotoReveal = styled.img`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  clip-path: ${(p) =>
+    p.$dragX < 0
+      ? `inset(0 ${-p.$dragX}px 0 0)`
+      : p.$dragX > 0
+      ? `inset(0 0 0 ${p.$dragX}px)`
+      : "inset(0 0 0 0)"};
+  transition: ${(p) =>
+    p.$dragging ? "none" : "clip-path 0.28s cubic-bezier(0.22, 1, 0.36, 1)"};
+  will-change: clip-path;
+  pointer-events: none;
+`;
+
+const RevealDivider = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  transition: ${(p) =>
+    p.$dragging ? "none" : "left 0.28s cubic-bezier(0.22, 1, 0.36, 1)"};
 `;
 
 const IconButton = styled.button`
@@ -114,14 +137,25 @@ const BottomRightSlot = styled.div`
   z-index: 7;
   display: flex;
   align-items: center;
-  /* Vertically center against the 84px shutter */
-  height: 84px;
+  /* Vertically center against the 72px shutter */
+  height: 72px;
+`;
+
+const BottomLeftSlot = styled.div`
+  position: absolute;
+  left: 32px;
+  bottom: calc(max(env(safe-area-inset-bottom), 28px) + 12px);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 72px;
 `;
 
 const Shutter = styled.button`
   appearance: none;
-  width: 84px;
-  height: 84px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   border: none;
   padding: 0;
@@ -153,8 +187,8 @@ const pulse = keyframes`
 
 const Mic = styled.button`
   appearance: none;
-  width: 84px;
-  height: 84px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   border: none;
   padding: 0;
@@ -189,37 +223,19 @@ const MicDot = styled.div`
 
 const TranscriptBubble = styled.div`
   position: absolute;
-  bottom: calc(max(env(safe-area-inset-bottom), 28px) + 130px);
+  bottom: calc(max(env(safe-area-inset-bottom), 28px) + 150px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(255, 60, 60, 0.85);
   color: #fff;
-  padding: 10px 16px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 500;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  max-width: 80vw;
+  font-size: 17px;
+  font-weight: 600;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.9), 0 0 48px rgba(0, 0, 0, 0.75),
+    0 0 12px rgba(0, 0, 0, 0.6);
+  width: 92vw;
+  max-width: 640px;
   text-align: center;
   pointer-events: none;
   z-index: 5;
-`;
-
-const LoadingOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 7;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  color: #fff;
-  font-size: 15px;
 `;
 
 const spin = keyframes`
@@ -227,12 +243,24 @@ const spin = keyframes`
 `;
 
 const Spinner = styled.div`
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border: 3px solid rgba(255, 255, 255, 0.25);
   border-top-color: #fff;
   border-radius: 50%;
   animation: ${spin} 0.9s linear infinite;
+`;
+
+const ProcessingDisc = styled.div`
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const ErrorToast = styled.div`
@@ -248,6 +276,50 @@ const ErrorToast = styled.div`
   max-width: 86vw;
   text-align: center;
   z-index: 10;
+`;
+
+const PermissionGate = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #fff;
+`;
+
+const PermissionTitle = styled.div`
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 10px;
+`;
+
+const PermissionButton = styled.button`
+  appearance: none;
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 240px;
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  transition: background 0.12s ease, transform 0.08s ease;
+  &:active {
+    transform: scale(0.97);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
 `;
 
 const flash = keyframes`
@@ -281,6 +353,22 @@ const XIcon = () => (
   </svg>
 );
 
+const SaveIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const ShareIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
+    <polyline points="16 6 12 2 8 6" />
+    <line x1="12" y1="2" x2="12" y2="15" />
+  </svg>
+);
+
 // Mode machine: 'live' -> 'captured' -> 'recording' -> 'processing' -> 'result'
 // 'result' returns to 'live' on close.
 
@@ -299,11 +387,18 @@ function App() {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, pointerId: null });
+  const settleTimerRef = useRef(null);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
   const [hasFacingControl, setHasFacingControl] = useState(false);
   const [showFlash, setShowFlash] = useState(false);
+  // null = still checking; then { cam, mic } with 'granted' | 'prompt' | 'denied'
+  const [perms, setPerms] = useState(null);
+
+  const camGranted = perms?.cam === "granted";
+  const micGranted = perms?.mic === "granted";
+  const needsPermissionGate = perms !== null && (!camGranted || !micGranted);
 
   // Mirror when the camera is user-facing. If the device can't report a
   // facingMode at all, it's a desktop webcam pointing at the user — mirror
@@ -348,16 +443,71 @@ function App() {
     }
   }, []);
 
+  // Check existing camera/mic permissions once on load. The Permissions API
+  // covers Chrome; Safari doesn't support 'camera'/'microphone' queries, so
+  // fall back to device labels — enumerateDevices only exposes labels once
+  // the matching permission has been granted.
   useEffect(() => {
-    startCamera(facing);
+    (async () => {
+      let cam = "prompt";
+      let mic = "prompt";
+      try {
+        const st = await navigator.permissions.query({ name: "camera" });
+        cam = st.state;
+      } catch {}
+      try {
+        const st = await navigator.permissions.query({ name: "microphone" });
+        mic = st.state;
+      } catch {}
+      if (cam !== "granted" || mic !== "granted") {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          if (devices.some((d) => d.kind === "videoinput" && d.label))
+            cam = "granted";
+          if (devices.some((d) => d.kind === "audioinput" && d.label))
+            mic = "granted";
+        } catch {}
+      }
+      setPerms({ cam, mic });
+    })();
+  }, []);
+
+  useEffect(() => {
     facingRef.current = facing;
+    if (!camGranted) return;
+    startCamera(facing);
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facing]);
+  }, [facing, camGranted]);
+
+  const enableCamera = async () => {
+    try {
+      // Just secure the permission here; the camera effect starts the real
+      // stream (with facing + resolution constraints) once cam is granted.
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      s.getTracks().forEach((t) => t.stop());
+      setPerms((p) => ({ ...p, cam: "granted" }));
+    } catch (err) {
+      console.error(err);
+      setError("Camera permission denied.");
+    }
+  };
+
+  const enableMic = async () => {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((t) => t.stop());
+      micPrimedRef.current = true;
+      setPerms((p) => ({ ...p, mic: "granted" }));
+    } catch (err) {
+      console.error(err);
+      setError("Microphone permission denied.");
+    }
+  };
 
   const flipCamera = () => {
     setFacing((f) => (f === "environment" ? "user" : "environment"));
@@ -427,6 +577,10 @@ function App() {
   };
 
   const resetToLive = () => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
     setHistory([]);
     setViewIndex(0);
     setDragX(0);
@@ -555,8 +709,11 @@ function App() {
           });
       } catch {}
 
-      setHistory((h) => [...h, data.image]);
-      setViewIndex((i) => i + 1);
+      // Always jump to the newly generated photo, even if the user was
+      // viewing an older one in the history when they spoke.
+      const next = [...history, data.image];
+      setHistory(next);
+      setViewIndex(next.length - 1);
       setDragX(0);
       setMode("result");
     } catch (err) {
@@ -587,12 +744,14 @@ function App() {
     }
   };
 
-  // --- Swipe through photo history ---
+  // --- Swipe through photo history (before/after wipe) ---
+  // The neighbor photo sits fully in place underneath; dragging clips the
+  // current photo away from the drag edge, revealing the neighbor beneath.
   const canSwipe = mode !== "live" && mode !== "processing" && history.length > 1;
 
   const onSwipeDown = (e) => {
     if (!canSwipe) return;
-    if (isDragging) return;
+    if (isDragging || settleTimerRef.current) return;
     dragStartRef.current = { x: e.clientX, pointerId: e.pointerId };
     setIsDragging(true);
     try {
@@ -603,9 +762,8 @@ function App() {
   const onSwipeMove = (e) => {
     if (!isDragging) return;
     const dx = e.clientX - dragStartRef.current.x;
-    // Older photos are positioned to the right of the current one and newer
-    // to the left, so a leftward drag (negative dx) reveals older history.
-    // Apply rubber-band resistance at the ends.
+    // A leftward drag (negative dx) wipes toward an older photo; rightward
+    // toward a newer one. Apply rubber-band resistance at the ends.
     let clamped = dx;
     const atOldest = viewIndex === 0;
     const atNewest = viewIndex === history.length - 1;
@@ -624,20 +782,101 @@ function App() {
     const width = e.currentTarget.offsetWidth || window.innerWidth;
     const threshold = width * 0.2;
     const dx = e.clientX - dragStartRef.current.x;
+    const commit = (target, fullDx) => {
+      // Animate the wipe to the edge, then swap in the revealed photo as
+      // the new unclipped top image.
+      setDragX(fullDx);
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        setViewIndex(target);
+        setDragX(0);
+      }, 300);
+    };
     if (dx < -threshold && viewIndex > 0) {
-      // Dragged left → reveal an older image (lower index).
-      setViewIndex(viewIndex - 1);
+      // Dragged left → wipe to an older image (lower index).
+      commit(viewIndex - 1, -width);
     } else if (dx > threshold && viewIndex < history.length - 1) {
-      // Dragged right → return to a newer image (higher index).
-      setViewIndex(viewIndex + 1);
+      // Dragged right → wipe to a newer image (higher index).
+      commit(viewIndex + 1, width);
+    } else {
+      setDragX(0);
     }
-    setDragX(0);
+  };
+
+  const getCurrentImageFile = async () => {
+    const src = history[viewIndex];
+    if (!src) return null;
+    // Data URLs are same-origin; remote URLs go through our proxy so we
+    // can fetch the bytes without CORS surprises.
+    const fetchUrl = src.startsWith("data:")
+      ? src
+      : `/api/image-proxy?url=${encodeURIComponent(src)}`;
+    const res = await fetch(fetchUrl);
+    const blob = await res.blob();
+    const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+    return new File([blob], `magic-camera-${Date.now()}.${ext}`, {
+      type: blob.type || "image/jpeg"
+    });
+  };
+
+  const downloadFile = (file) => {
+    const blobUrl = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const onSave = async () => {
+    try {
+      const file = await getCurrentImageFile();
+      if (!file) return;
+      downloadFile(file);
+    } catch (err) {
+      console.error("Save failed:", err);
+      setError("Could not save image.");
+    }
+  };
+
+  const onShare = async () => {
+    try {
+      const file = await getCurrentImageFile();
+      if (!file) return;
+
+      if (
+        navigator.canShare &&
+        navigator.canShare({ files: [file] }) &&
+        navigator.share
+      ) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+
+      // Fallback: trigger a download
+      downloadFile(file);
+    } catch (err) {
+      if (err?.name === "AbortError") return; // user dismissed share sheet
+      console.error("Share failed:", err);
+      setError("Could not save image.");
+    }
   };
 
   const isLive = mode === "live";
   const showPhoto = mode !== "live" && history.length > 0;
   const isRecording = mode === "recording";
   const isProcessing = mode === "processing";
+
+  // Which photo is fully in place underneath the clipped top photo while a
+  // wipe is in progress. Null at the ends (rubber-band shows black).
+  const underIndex =
+    dragX < 0 && viewIndex > 0
+      ? viewIndex - 1
+      : dragX > 0 && viewIndex < history.length - 1
+      ? viewIndex + 1
+      : null;
 
   return (
     <Stage>
@@ -657,18 +896,28 @@ function App() {
             onPointerUp={onSwipeUp}
             onPointerCancel={onSwipeUp}
           >
-            {history.map((url, i) => (
-              <PhotoSlide
-                key={i}
-                src={url}
-                alt=""
-                draggable={false}
-                $index={i}
-                $viewIndex={viewIndex}
-                $dragX={dragX}
+            {underIndex !== null && (
+              <PhotoUnder src={history[underIndex]} alt="" draggable={false} />
+            )}
+            {/* Keyed by viewIndex so the swap after a wipe remounts the top
+                image instead of animating its clip-path from the old value. */}
+            <PhotoReveal
+              key={viewIndex}
+              src={history[viewIndex]}
+              alt=""
+              draggable={false}
+              $dragX={dragX}
+              $dragging={isDragging}
+            />
+            {dragX !== 0 && (
+              <RevealDivider
                 $dragging={isDragging}
+                style={{
+                  left:
+                    dragX < 0 ? `calc(100% - ${-dragX}px)` : `${dragX}px`
+                }}
               />
-            ))}
+            )}
           </PhotoStack>
         )}
         {showFlash && <Flash />}
@@ -685,7 +934,7 @@ function App() {
             <ShutterDot />
           </Shutter>
         )}
-        {mode !== "live" && (
+        {mode !== "live" && !isProcessing && (
           <Mic
             $recording={isRecording}
             onPointerDown={onMicDown}
@@ -696,6 +945,11 @@ function App() {
           >
             <MicDot $recording={isRecording} />
           </Mic>
+        )}
+        {isProcessing && (
+          <ProcessingDisc aria-label="Making magic">
+            <Spinner />
+          </ProcessingDisc>
         )}
       </ControlBar>
 
@@ -719,11 +973,35 @@ function App() {
         </BottomRightSlot>
       )}
 
-      {isProcessing && (
-        <LoadingOverlay>
-          <Spinner />
-          <div>Making magic…</div>
-        </LoadingOverlay>
+      {mode !== "live" && history.length > 0 && (
+        <BottomLeftSlot>
+          <IconButton
+            onClick={onSave}
+            disabled={isProcessing}
+            aria-label="Save photo"
+          >
+            <SaveIcon />
+          </IconButton>
+          <IconButton
+            onClick={onShare}
+            disabled={isProcessing}
+            aria-label="Share photo"
+          >
+            <ShareIcon />
+          </IconButton>
+        </BottomLeftSlot>
+      )}
+
+      {needsPermissionGate && (
+        <PermissionGate>
+          <PermissionTitle>Magic Camera needs your permission</PermissionTitle>
+          <PermissionButton onClick={enableCamera} disabled={camGranted}>
+            {camGranted ? "✓ Camera enabled" : "Enable camera"}
+          </PermissionButton>
+          <PermissionButton onClick={enableMic} disabled={micGranted}>
+            {micGranted ? "✓ Microphone enabled" : "Enable microphone"}
+          </PermissionButton>
+        </PermissionGate>
       )}
 
       {error && <ErrorToast onClick={() => setError(null)}>{error}</ErrorToast>}
