@@ -51,6 +51,10 @@ const Video = styled.video`
   object-fit: cover;
   /* Mirror the front camera, like a selfie view, only when applicable */
   transform: ${(p) => (p.$mirror ? "scaleX(-1)" : "none")};
+  /* Stay hidden until the stream is actually rendering frames, then fade
+     in — avoids the small mis-sized rectangle while the stream starts. */
+  opacity: ${(p) => (p.$ready ? 1 : 0)};
+  transition: opacity 0.35s ease;
 `;
 
 const PhotoStack = styled.div`
@@ -454,7 +458,10 @@ const DebugReadout = styled.div`
   font-size: 11px;
   font-family: monospace;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
-  white-space: nowrap;
+  width: 90vw;
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
   z-index: 30;
   pointer-events: none;
 `;
@@ -488,6 +495,7 @@ function App() {
   const [facing, setFacing] = useState("environment");
   const [hasFacingControl, setHasFacingControl] = useState(false);
   const [showFlash, setShowFlash] = useState(false);
+  const [camReady, setCamReady] = useState(false);
   // null = still checking; then { cam, mic } with 'granted' | 'prompt' | 'denied'
   const [perms, setPerms] = useState(null);
 
@@ -503,6 +511,7 @@ function App() {
   // Start / restart camera
   const startCamera = useCallback(async (mode) => {
     try {
+      setCamReady(false);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
@@ -1019,6 +1028,9 @@ function App() {
           muted
           autoPlay
           $mirror={isMirrored}
+          $ready={camReady}
+          onLoadedData={() => setCamReady(true)}
+          onPlaying={() => setCamReady(true)}
           style={{ visibility: isLive ? "visible" : "hidden" }}
         />
         {showPhoto && (
