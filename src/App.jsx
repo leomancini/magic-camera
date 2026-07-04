@@ -693,7 +693,7 @@ function App() {
       // out together, so the compensation shrinks in lockstep with the
       // remaining blur.
       const bleedScale = 1 + 68 / (window.innerWidth || 400);
-      setScaleAnim("1.2s ease-out");
+      setScaleAnim("0.5s ease-out");
       setScale(Math.max(1.06, bleedScale));
     } catch (err) {
       console.error(err);
