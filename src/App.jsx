@@ -687,7 +687,7 @@ function App() {
       // out together, so the compensation shrinks in lockstep with the
       // remaining blur.
       const bleedScale = 1 + 68 / (window.innerWidth || 400);
-      setScaleAnim("0.2s ease-out");
+      setScaleAnim("0.2s ease-in-out");
       setScale(Math.max(1.06, bleedScale));
     } catch (err) {
       console.error(err);
@@ -718,7 +718,7 @@ function App() {
       // No speech detected — quietly return to the captured photo.
       setMode("captured");
       setTranscript("");
-      setScaleAnim("0.2s ease-out");
+      setScaleAnim("0.2s ease-in-out");
       setScale(1);
       submittingRef.current = false;
       return;
@@ -777,9 +777,9 @@ function App() {
       setMode("result");
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          setBlurAnim("0.2s ease-out");
+          setBlurAnim("0.2s ease-in-out");
           setBlurPx(0);
-          setScaleAnim("0.2s ease-out");
+          setScaleAnim("0.2s ease-in-out");
           setScale(1);
         })
       );
@@ -789,7 +789,7 @@ function App() {
       setMode("captured");
       setBlurAnim(null);
       setBlurPx(0);
-      setScaleAnim("0.2s ease-out");
+      setScaleAnim("0.2s ease-in-out");
       setScale(1);
     } finally {
       submittingRef.current = false;
