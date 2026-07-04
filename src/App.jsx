@@ -6,13 +6,21 @@ const Stage = styled.div`
   top: 0;
   left: 0;
   right: 0;
-  /* Span the true screen height: 100vh plus however far the layout
-     viewport falls short of the screen on iOS standalone (0 elsewhere).
-     Bottom-anchored children then sit relative to the real screen
-     bottom. */
-  height: calc(100vh + ${(p) => p.$shortfall || 0}px);
   background: #000;
-  overflow: ${(p) => (p.$standalone ? "visible" : "hidden")};
+  ${(p) =>
+    p.$standalone
+      ? css`
+          /* Span the true screen height: 100vh plus however far the
+             layout viewport still falls short on iOS standalone.
+             Bottom-anchored children then sit relative to the real
+             screen bottom. */
+          height: calc(100vh + ${p.$shortfall || 0}px);
+          overflow: visible;
+        `
+      : css`
+          bottom: 0;
+          overflow: hidden;
+        `}
 `;
 
 const Frame = styled.div`

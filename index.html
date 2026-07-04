@@ -32,6 +32,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Magic Camera</title>
+    <script>
+      // Flag installed-PWA mode before first layout so CSS can scope the
+      // full-bleed viewport treatment (100vh sizing) to standalone only.
+      if (navigator.standalone) {
+        document.documentElement.classList.add("standalone");
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
