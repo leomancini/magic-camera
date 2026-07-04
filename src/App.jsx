@@ -577,17 +577,6 @@ function App() {
     setShowFlash(true);
     setTimeout(() => setShowFlash(false), 400);
 
-    // Push in a bit on capture; the zoom releases when a generated photo
-    // arrives.
-    setScaleAnim(null);
-    setScale(1);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        setScaleAnim("0.7s ease-out");
-        setScale(1.06);
-      })
-    );
-
     // Pause the live stream to save battery while reviewing
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
@@ -730,8 +719,8 @@ function App() {
     setMode("processing");
 
     // While processing, the photo's blur oscillates via the blurPulse
-    // animation. Also ease into the zoomed-in state in case we're iterating
-    // on a result that had already zoomed back out.
+    // animation and the photo eases into a gentle zoom, released when the
+    // result arrives.
     setScaleAnim("2.5s ease-out");
     setScale(1.06);
 
