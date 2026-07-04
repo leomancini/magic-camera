@@ -80,10 +80,15 @@ const PhotoUnder = styled.img`
   pointer-events: none;
 `;
 
+const blurIn = keyframes`
+  from { filter: blur(0); }
+  to { filter: blur(8px); }
+`;
+
 const blurPulse = keyframes`
-  0% { filter: blur(4px); }
-  50% { filter: blur(32px); }
-  100% { filter: blur(4px); }
+  0% { filter: blur(8px); }
+  50% { filter: blur(24px); }
+  100% { filter: blur(8px); }
 `;
 
 const PhotoReveal = styled.img`
@@ -103,7 +108,11 @@ const PhotoReveal = styled.img`
   ${(p) =>
     p.$processing &&
     css`
-      animation: ${blurPulse} 3.2s ease-in-out infinite;
+      /* Ramp 0 -> 8px, then oscillate 8px <-> 24px until the result
+         arrives. The pulse is delayed by the ramp's duration so it takes
+         over seamlessly at 8px. */
+      animation: ${blurIn} 0.6s ease-in forwards,
+        ${blurPulse} 3.2s ease-in-out 0.6s infinite;
     `}
   transition: ${(p) =>
     [
