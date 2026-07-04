@@ -943,19 +943,19 @@ function App() {
       )}
 
       {mode !== "live" && !isProcessing && (
-        <BottomRightSlot>
+        <BottomLeftSlot>
           <IconButton onClick={resetToLive} aria-label="Close">
             <XIcon />
           </IconButton>
-        </BottomRightSlot>
+        </BottomLeftSlot>
       )}
 
       {mode !== "live" && !isProcessing && history.length > 0 && (
-        <BottomLeftSlot>
+        <BottomRightSlot>
           <IconButton onClick={onShare} aria-label="Share photo">
             <ShareIcon />
           </IconButton>
-        </BottomLeftSlot>
+        </BottomRightSlot>
       )}
 
       {needsPermissionGate && (
