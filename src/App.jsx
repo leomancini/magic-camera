@@ -426,6 +426,39 @@ const isStandalone =
   window.navigator.standalone === true ||
   window.matchMedia?.("(display-mode: standalone)")?.matches === true;
 
+// Temporary diagnostic readout (standalone only) for the bottom-bar issue:
+// samples env(safe-area-inset-bottom) via a probe element plus the viewport
+// numbers the overhang math depends on.
+function readDebugInfo() {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px);padding-top:env(safe-area-inset-top,0px);";
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const envBottom = cs.paddingBottom;
+  const envTop = cs.paddingTop;
+  probe.remove();
+  return `dbg1 ns:${String(window.navigator.standalone)} mm:${
+    window.matchMedia?.("(display-mode: standalone)")?.matches
+  } ih:${window.innerHeight} oh:${window.outerHeight} sh:${
+    window.screen?.height
+  } envT:${envTop} envB:${envBottom} short:${iosViewportShortfall}`;
+}
+
+const DebugReadout = styled.div`
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #0f0;
+  font-size: 11px;
+  font-family: monospace;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  z-index: 30;
+  pointer-events: none;
+`;
+
 // Mode machine: 'live' -> 'captured' -> 'recording' -> 'processing' -> 'result'
 // 'result' returns to 'live' on close.
 
@@ -1093,6 +1126,8 @@ function App() {
           </PermissionButton>
         </PermissionGate>
       )}
+
+      {isStandalone && <DebugReadout>{readDebugInfo()}</DebugReadout>}
 
       {error && <ErrorToast onClick={() => setError(null)}>{error}</ErrorToast>}
     </Stage>
