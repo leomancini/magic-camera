@@ -24,13 +24,16 @@ const Frame = styled.div`
     p.$standalone
       ? css`
           /* iOS standalone lays out the fixed viewport ABOVE the
-             home-indicator area while env() still reports the inset, so
-             bottom: 0 stops short of the physical screen bottom — extend
-             past the viewport by that inset to truly reach it. */
+             home-indicator area — and reports env(safe-area-inset-bottom)
+             as 0 there — so bottom: 0 stops short of the physical screen
+             bottom. Overhang by at least the 34pt home-indicator height on
+             iOS home-screen apps to truly reach it. */
           top: 0;
           left: 0;
           right: 0;
-          bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+          bottom: ${window.navigator.standalone === true
+            ? "calc(-1 * max(env(safe-area-inset-bottom, 0px), 34px))"
+            : "calc(-1 * env(safe-area-inset-bottom, 0px))"};
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
