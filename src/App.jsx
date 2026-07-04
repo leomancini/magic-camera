@@ -358,7 +358,7 @@ const flash = keyframes`
 const Flash = styled.div`
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: #000;
   z-index: 8;
   pointer-events: none;
   animation: ${flash} 0.4s ease-out;
