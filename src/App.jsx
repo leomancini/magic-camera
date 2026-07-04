@@ -10,29 +10,25 @@ const Stage = styled.div`
 
 const Frame = styled.div`
   position: absolute;
-  top: max(env(safe-area-inset-top), 4px);
-  left: 4px;
-  right: 4px;
-  bottom: max(env(safe-area-inset-bottom), 4px);
-  border-radius: 12px;
+  border-radius: 36px;
   overflow: hidden;
   background: #000;
 
-  @media (pointer: coarse) {
-    border-radius: 36px;
-  }
-
   /* Installed PWA: go full-bleed so the camera reaches the very top,
-     tucking under the rounded corners, and extends further down past
-     the home-indicator inset. */
-  @media (display-mode: standalone) {
-    /* Overshoot the top by 1px — viewport rounding otherwise leaves a
-       1px sliver of background clipping the camera at the very top. */
-    top: -1px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-  }
+     tucking under the rounded screen corners, and extends all the way
+     down past the home-indicator inset. Detected in JS because iOS
+     home-screen apps don't reliably match (display-mode: standalone). */
+  ${(p) =>
+    p.$standalone
+      ? css`
+          inset: 0;
+        `
+      : css`
+          top: max(env(safe-area-inset-top), 4px);
+          left: 4px;
+          right: 4px;
+          bottom: max(env(safe-area-inset-bottom), 4px);
+        `}
 `;
 
 const Video = styled.video`
@@ -372,6 +368,12 @@ const ShareIcon = () => (
     <line x1="12" y1="2" x2="12" y2="15" />
   </svg>
 );
+
+// Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
+// everything else (Android, desktop) matches the display-mode media query.
+const isStandalone =
+  window.navigator.standalone === true ||
+  window.matchMedia?.("(display-mode: standalone)")?.matches === true;
 
 // Mode machine: 'live' -> 'captured' -> 'recording' -> 'processing' -> 'result'
 // 'result' returns to 'live' on close.
@@ -873,7 +875,7 @@ function App() {
 
   return (
     <Stage>
-      <Frame>
+      <Frame $standalone={isStandalone}>
         <Video
           ref={videoRef}
           playsInline
