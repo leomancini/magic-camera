@@ -26,7 +26,9 @@ const Frame = styled.div`
      tucking under the rounded corners, and extends further down past
      the home-indicator inset. */
   @media (display-mode: standalone) {
-    top: 0;
+    /* Overshoot the top by 1px — viewport rounding otherwise leaves a
+       1px sliver of background clipping the camera at the very top. */
+    top: -1px;
     left: 0;
     right: 0;
     bottom: 0;
