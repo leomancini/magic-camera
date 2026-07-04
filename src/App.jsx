@@ -72,9 +72,15 @@ const PhotoReveal = styled.img`
       : p.$dragX > 0
       ? `inset(0 0 0 ${p.$dragX}px)`
       : "inset(0 0 0 0)"};
+  filter: ${(p) => (p.$blur ? `blur(${p.$blur}px)` : "none")};
   transition: ${(p) =>
-    p.$dragging ? "none" : "clip-path 0.28s cubic-bezier(0.22, 1, 0.36, 1)"};
-  will-change: clip-path;
+    [
+      p.$dragging ? null : "clip-path 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+      p.$blurAnim ? `filter ${p.$blurAnim}` : null
+    ]
+      .filter(Boolean)
+      .join(", ") || "none"};
+  will-change: clip-path, filter;
   pointer-events: none;
 `;
 
@@ -394,6 +400,9 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, pointerId: null });
   const settleTimerRef = useRef(null);
+  const photoRef = useRef(null);
+  const [blurPx, setBlurPx] = useState(0);
+  const [blurAnim, setBlurAnim] = useState(null); // e.g. "12s ease-out"
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
@@ -591,6 +600,8 @@ function App() {
     setViewIndex(0);
     setDragX(0);
     setIsDragging(false);
+    setBlurAnim(null);
+    setBlurPx(0);
     setTranscript("");
     transcriptRef.current = "";
     setError(null);
@@ -690,6 +701,17 @@ function App() {
 
     setMode("processing");
 
+    // Blur the source photo while we wait: jump to 8px, then drift up
+    // toward 24px over the course of the generation.
+    setBlurAnim(null);
+    setBlurPx(8);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setBlurAnim("12s ease-out");
+        setBlurPx(24);
+      })
+    );
+
     try {
       const sourceImage = history[viewIndex];
       const res = await fetch("/api/transform", {
@@ -715,6 +737,19 @@ function App() {
           });
       } catch {}
 
+      // Hand the blur off to the new photo: sample whatever blur level the
+      // in-flight animation reached, show the result at that same blur,
+      // then ease it down to sharp.
+      let handoffBlur = 24;
+      if (photoRef.current) {
+        const m = /blur\(([\d.]+)px\)/.exec(
+          getComputedStyle(photoRef.current).filter
+        );
+        if (m) handoffBlur = parseFloat(m[1]);
+      }
+      setBlurAnim(null);
+      setBlurPx(handoffBlur);
+
       // Always jump to the newly generated photo, even if the user was
       // viewing an older one in the history when they spoke.
       const next = [...history, data.image];
@@ -722,10 +757,18 @@ function App() {
       setViewIndex(next.length - 1);
       setDragX(0);
       setMode("result");
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setBlurAnim("1.6s ease-out");
+          setBlurPx(0);
+        })
+      );
     } catch (err) {
       console.error(err);
       setError(err.message || "Something went wrong.");
       setMode("captured");
+      setBlurAnim(null);
+      setBlurPx(0);
     } finally {
       submittingRef.current = false;
     }
@@ -769,12 +812,13 @@ function App() {
     if (!isDragging) return;
     const dx = e.clientX - dragStartRef.current.x;
     // A leftward drag (negative dx) wipes toward an older photo; rightward
-    // toward a newer one. Apply rubber-band resistance at the ends.
+    // toward a newer one. Past the ends there's nothing to reveal, so the
+    // photo doesn't move at all (no rubber-band, no divider).
     let clamped = dx;
     const atOldest = viewIndex === 0;
     const atNewest = viewIndex === history.length - 1;
     if ((atOldest && dx < 0) || (atNewest && dx > 0)) {
-      clamped = dx * 0.25;
+      clamped = 0;
     }
     setDragX(clamped);
   };
@@ -898,11 +942,14 @@ function App() {
                 image instead of animating its clip-path from the old value. */}
             <PhotoReveal
               key={viewIndex}
+              ref={photoRef}
               src={history[viewIndex]}
               alt=""
               draggable={false}
               $dragX={dragX}
               $dragging={isDragging}
+              $blur={blurPx}
+              $blurAnim={blurAnim}
             />
             {dragX !== 0 && (
               <RevealDivider
