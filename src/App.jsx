@@ -452,51 +452,6 @@ const isStandalone =
   window.navigator.standalone === true ||
   window.matchMedia?.("(display-mode: standalone)")?.matches === true;
 
-// Temporary diagnostic readout (standalone only) for the bottom-bar issue:
-// samples env(safe-area-inset-bottom) via a probe element plus the viewport
-// numbers the overhang math depends on.
-function readDebugInfo() {
-  const probe = document.createElement("div");
-  probe.style.cssText =
-    "position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px);padding-top:env(safe-area-inset-top,0px);";
-  document.body.appendChild(probe);
-  const cs = getComputedStyle(probe);
-  const envBottom = cs.paddingBottom;
-  const envTop = cs.paddingTop;
-  probe.remove();
-  return `dbg4 ns:${String(window.navigator.standalone)} ih:${
-    window.innerHeight
-  } vh:${measure100vh()} sh:${
-    window.screen?.height
-  } envT:${envTop} envB:${envBottom} short:${measureViewportShortfall()}`;
-}
-
-function DebugLine() {
-  const [txt, setTxt] = useState(readDebugInfo);
-  useEffect(() => {
-    const id = setInterval(() => setTxt(readDebugInfo()), 500);
-    return () => clearInterval(id);
-  }, []);
-  return <DebugReadout>{txt}</DebugReadout>;
-}
-
-const DebugReadout = styled.div`
-  position: absolute;
-  top: 70px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #0f0;
-  font-size: 11px;
-  font-family: monospace;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
-  width: 90vw;
-  white-space: normal;
-  word-break: break-word;
-  text-align: center;
-  z-index: 30;
-  pointer-events: none;
-`;
-
 // Mode machine: 'live' -> 'captured' -> 'recording' -> 'processing' -> 'result'
 // 'result' returns to 'live' on close.
 
@@ -1187,8 +1142,6 @@ function App() {
           </PermissionButton>
         </PermissionGate>
       )}
-
-      {isStandalone && <DebugLine />}
 
       {error && <ErrorToast onClick={() => setError(null)}>{error}</ErrorToast>}
     </Stage>
