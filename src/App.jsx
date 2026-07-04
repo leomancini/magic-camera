@@ -391,6 +391,23 @@ const ShareIcon = () => (
   </svg>
 );
 
+// API key: arrives via ?key= in the URL and is persisted so the installed
+// PWA (whose start URL has no query) keeps working. Never hardcoded here.
+const appKey = (() => {
+  const fromUrl = new URLSearchParams(window.location.search).get("key");
+  if (fromUrl) {
+    try {
+      localStorage.setItem("magic-camera-key", fromUrl);
+    } catch {}
+    return fromUrl;
+  }
+  try {
+    return localStorage.getItem("magic-camera-key") || "";
+  } catch {
+    return "";
+  }
+})();
+
 // Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
 // everything else (Android, desktop) matches the display-mode media query.
 const isStandalone =
@@ -737,7 +754,7 @@ function App() {
 
     try {
       const sourceImage = history[viewIndex];
-      const res = await fetch("/api/transform", {
+      const res = await fetch(`/api/transform?key=${encodeURIComponent(appKey)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: sourceImage, prompt: finalPrompt })
@@ -891,7 +908,7 @@ function App() {
     // can fetch the bytes without CORS surprises.
     const fetchUrl = src.startsWith("data:")
       ? src
-      : `/api/image-proxy?url=${encodeURIComponent(src)}`;
+      : `/api/image-proxy?url=${encodeURIComponent(src)}&key=${encodeURIComponent(appKey)}`;
     const res = await fetch(fetchUrl);
     const blob = await res.blob();
     const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");

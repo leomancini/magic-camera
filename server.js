@@ -11,9 +11,23 @@ const port = 3135;
 
 const POE_API_KEY = process.env.POE_API_KEY;
 const POE_MODEL = "nano-banana-2";
+// Shared secret required on all API calls, passed by the client as ?key=.
+// Lives only in .env (never committed).
+const APP_KEY = process.env.APP_KEY;
 
 app.use(express.json({ limit: "25mb" }));
 app.use(express.static(join(__dirname, "dist")));
+
+// Gate the API behind the key. Fails closed if APP_KEY isn't configured.
+app.use("/api", (req, res, next) => {
+  if (!APP_KEY) {
+    return res.status(500).json({ error: "Server key not configured" });
+  }
+  if (req.query.key !== APP_KEY) {
+    return res.status(401).json({ error: "Invalid or missing key" });
+  }
+  next();
+});
 
 // Extract image URLs from Poe-style markdown content like:
 // "![desc](https://...png)" or attachment objects.
