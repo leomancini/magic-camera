@@ -428,15 +428,24 @@ const measureViewportShortfall = () =>
 const isFullscreen = () =>
   !!(document.fullscreenElement || document.webkitFullscreenElement);
 
+let fsDebug = "idle";
+
 const requestAppFullscreen = () => {
   if (isFullscreen()) return;
   const el = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (!req) return;
+  if (!req) {
+    fsDebug = "no-api";
+    return;
+  }
   try {
+    fsDebug = "requested";
     const p = req.call(el, { navigationUI: "hide" });
-    p?.catch?.(() => {});
-  } catch {}
+    p?.then?.(() => (fsDebug = "granted"));
+    p?.catch?.((e) => (fsDebug = `rej:${e?.name || e}`));
+  } catch (e) {
+    fsDebug = `err:${e?.name || e}`;
+  }
 };
 
 // Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
@@ -457,9 +466,21 @@ function readDebugInfo() {
   const envBottom = cs.paddingBottom;
   const envTop = cs.paddingTop;
   probe.remove();
-  return `dbg2 ns:${String(window.navigator.standalone)} fs:${isFullscreen()} ih:${
-    window.innerHeight
-  } sh:${window.screen?.height} envT:${envTop} envB:${envBottom} short:${measureViewportShortfall()}`;
+  const el = document.documentElement;
+  return `dbg3 ns:${String(window.navigator.standalone)} fs:${isFullscreen()} fsApi:${!!(
+    el.requestFullscreen || el.webkitRequestFullscreen
+  )} fsState:${fsDebug} ih:${window.innerHeight} sh:${
+    window.screen?.height
+  } envT:${envTop} envB:${envBottom} short:${measureViewportShortfall()}`;
+}
+
+function DebugLine() {
+  const [txt, setTxt] = useState(readDebugInfo);
+  useEffect(() => {
+    const id = setInterval(() => setTxt(readDebugInfo()), 500);
+    return () => clearInterval(id);
+  }, []);
+  return <DebugReadout>{txt}</DebugReadout>;
 }
 
 const DebugReadout = styled.div`
@@ -523,15 +544,20 @@ function App() {
     const onTap = () => {
       if (measureViewportShortfall() > 0) requestAppFullscreen();
     };
+    // touchend/click carry the user-activation grant fullscreen requires
+    // on iOS (pointerdown does not). Capture phase so preventDefault in
+    // app handlers can't starve us of the event.
     window.addEventListener("resize", update);
     document.addEventListener("fullscreenchange", update);
     document.addEventListener("webkitfullscreenchange", update);
-    window.addEventListener("pointerdown", onTap, true);
+    window.addEventListener("touchend", onTap, true);
+    window.addEventListener("click", onTap, true);
     return () => {
       window.removeEventListener("resize", update);
       document.removeEventListener("fullscreenchange", update);
       document.removeEventListener("webkitfullscreenchange", update);
-      window.removeEventListener("pointerdown", onTap, true);
+      window.removeEventListener("touchend", onTap, true);
+      window.removeEventListener("click", onTap, true);
     };
   }, []);
   // null = still checking; then { cam, mic } with 'granted' | 'prompt' | 'denied'
@@ -1177,7 +1203,7 @@ function App() {
         </PermissionGate>
       )}
 
-      {isStandalone && <DebugReadout>{readDebugInfo()}</DebugReadout>}
+      {isStandalone && <DebugLine />}
 
       {error && <ErrorToast onClick={() => setError(null)}>{error}</ErrorToast>}
     </Stage>
