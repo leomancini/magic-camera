@@ -290,18 +290,10 @@ const ProcessingDisc = styled.div`
   justify-content: center;
 `;
 
-const ErrorToast = styled.div`
-  position: absolute;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(255, 60, 60, 0.9);
-  color: #fff;
-  padding: 10px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  max-width: 86vw;
-  text-align: center;
+const ErrorToast = styled(TranscriptBubble)`
+  color: #ff4d4d;
+  pointer-events: auto;
+  cursor: pointer;
   z-index: 10;
 `;
 
@@ -693,7 +685,7 @@ function App() {
       // out together, so the compensation shrinks in lockstep with the
       // remaining blur.
       const bleedScale = 1 + 68 / (window.innerWidth || 400);
-      setScaleAnim("0.5s ease-out");
+      setScaleAnim("0.3s ease-out");
       setScale(Math.max(1.06, bleedScale));
     } catch (err) {
       console.error(err);
