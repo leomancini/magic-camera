@@ -25,7 +25,6 @@ const Stage = styled.div`
 
 const Frame = styled.div`
   position: absolute;
-  border-radius: 36px;
   overflow: hidden;
   background: #000;
 
@@ -36,14 +35,17 @@ const Frame = styled.div`
   ${(p) =>
     p.$standalone
       ? css`
-          /* Full-bleed: the Stage already spans the true screen height. */
+          /* Full-bleed: the Stage already spans the true screen height.
+             No border radius — the screen's own corners do the rounding. */
           inset: 0;
+          border-radius: 0;
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
           left: 4px;
           right: 4px;
           bottom: max(env(safe-area-inset-bottom), 4px);
+          border-radius: 36px;
         `}
 `;
 
