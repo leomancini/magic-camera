@@ -36,9 +36,12 @@ const Frame = styled.div`
     p.$standalone
       ? css`
           /* Full-bleed: the Stage already spans the true screen height.
-             No border radius — the screen's own corners do the rounding. */
+             The 1px radius is imperceptible but load-bearing: with the
+             video clipped exactly square to the screen, iOS 26 treats it
+             as fullscreen video playback and overlays a system pause
+             button (going from 36px radius to 0 is what summoned it). */
           inset: 0;
-          border-radius: 0;
+          border-radius: 1px;
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
