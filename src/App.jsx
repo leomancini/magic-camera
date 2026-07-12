@@ -25,6 +25,7 @@ const Stage = styled.div`
 
 const Frame = styled.div`
   position: absolute;
+  border-radius: 36px;
   overflow: hidden;
   background: #000;
 
@@ -35,20 +36,14 @@ const Frame = styled.div`
   ${(p) =>
     p.$standalone
       ? css`
-          /* Full-bleed: the Stage already spans the true screen height.
-             The 1px radius is imperceptible but load-bearing: with the
-             video clipped exactly square to the screen, iOS 26 treats it
-             as fullscreen video playback and overlays a system pause
-             button (going from 36px radius to 0 is what summoned it). */
+          /* Full-bleed: the Stage already spans the true screen height. */
           inset: 0;
-          border-radius: 1px;
         `
       : css`
           top: max(env(safe-area-inset-top), 4px);
           left: 4px;
           right: 4px;
           bottom: max(env(safe-area-inset-bottom), 4px);
-          border-radius: 36px;
         `}
 `;
 
@@ -64,17 +59,6 @@ const Video = styled.video`
      in — avoids the small mis-sized rectangle while the stream starts. */
   opacity: ${(p) => (p.$ready ? 1 : 0)};
   transition: opacity 0.35s ease;
-
-  /* Never show WebKit's native media chrome (play/pause overlay etc.) on
-     the live camera feed. */
-  &::-webkit-media-controls,
-  &::-webkit-media-controls-panel,
-  &::-webkit-media-controls-start-playback-button,
-  &::-webkit-media-controls-overlay-play-button {
-    display: none !important;
-    -webkit-appearance: none;
-    opacity: 0 !important;
-  }
 `;
 
 const PhotoStack = styled.div`
@@ -510,22 +494,6 @@ function App() {
   const [viewportShortfall, setViewportShortfall] = useState(
     measureViewportShortfall
   );
-
-  // If iOS ever pauses the camera video (rejected autoplay on cold launch,
-  // returning from background), resume it — a paused video is also what
-  // makes WebKit surface its native play/pause overlay.
-  useEffect(() => {
-    const resume = () => {
-      const v = videoRef.current;
-      if (v && v.srcObject && v.paused) v.play().catch(() => {});
-    };
-    document.addEventListener("visibilitychange", resume);
-    window.addEventListener("pointerdown", resume, true);
-    return () => {
-      document.removeEventListener("visibilitychange", resume);
-      window.removeEventListener("pointerdown", resume, true);
-    };
-  }, []);
 
   // Keep the shortfall current — iOS can settle viewport metrics a beat
   // after launch, so re-measure on resize and shortly after mount.
@@ -1072,8 +1040,6 @@ function App() {
           playsInline
           muted
           autoPlay
-          disablePictureInPicture
-          disableRemotePlayback
           $mirror={isMirrored}
           $ready={camReady}
           onLoadedData={() => setCamReady(true)}
