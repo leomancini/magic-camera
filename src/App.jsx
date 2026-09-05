@@ -481,6 +481,9 @@ function App() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recognitionRef = useRef(null);
+  const recRunningRef = useRef(false);
+  const recEndWaitersRef = useRef([]);
+  const micHeldRef = useRef(false);
   const transcriptRef = useRef("");
   const facingRef = useRef("environment");
   const submittingRef = useRef(false);
@@ -630,6 +633,22 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facing, camGranted]);
 
+  // Release the recognizer if the app goes away mid-hold, so it doesn't
+  // keep the microphone open.
+  useEffect(
+    () => () => {
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      recRunningRef.current = false;
+      if (rec) {
+        try {
+          rec.abort();
+        } catch {}
+      }
+    },
+    []
+  );
+
   const enableCamera = async () => {
     try {
       // Just secure the permission here; the camera effect starts the real
@@ -723,6 +742,8 @@ function App() {
   };
 
   const resetToLive = () => {
+    micHeldRef.current = false;
+    releaseRecognition();
     if (settleTimerRef.current) {
       clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
@@ -750,16 +771,14 @@ function App() {
   const getRecognitionCtor = () =>
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  const startRecording = () => {
-    setError(null);
+  // One recognizer for the whole session, restarted on each hold. Building a
+  // fresh SpeechRecognition per press looks harmless but Safari hands back a
+  // dead object for every press after the first, which is why the second
+  // photo always failed with a speech error.
+  const ensureRecognition = () => {
+    if (recognitionRef.current) return recognitionRef.current;
     const Ctor = getRecognitionCtor();
-    if (!Ctor) {
-      setError("Speech recognition not supported in this browser.");
-      return;
-    }
-
-    transcriptRef.current = "";
-    setTranscript("");
+    if (!Ctor) return null;
 
     const rec = new Ctor();
     rec.lang = "en-US";
@@ -780,41 +799,117 @@ function App() {
     };
 
     rec.onerror = (e) => {
+      // "aborted" and "no-speech" are just how a press-and-hold ends — we
+      // stop the recognizer ourselves on release, and a quick tap carries no
+      // audio at all. Neither is the user's problem.
+      if (e.error === "aborted" || e.error === "no-speech") return;
       console.error("Speech error", e);
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setError("Microphone permission denied.");
-      } else if (e.error === "no-speech") {
-        // ignore — user just hadn't started talking yet
       } else {
         setError(`Speech error: ${e.error}`);
       }
     };
 
     rec.onend = () => {
-      // If we stopped because the user released the button, the mode will
-      // already have transitioned. Nothing more to do here.
+      recRunningRef.current = false;
+      const waiters = recEndWaitersRef.current;
+      recEndWaitersRef.current = [];
+      waiters.forEach((resolve) => resolve());
     };
 
-    try {
-      rec.start();
-      recognitionRef.current = rec;
-      setMode("recording");
+    recognitionRef.current = rec;
+    return rec;
+  };
 
-      // Ease into the zoom as soon as recording starts. It doubles as
-      // bleed compensation while the photo blurs during processing:
-      // Gaussian blur samples past the element's edges, leaving a faded
-      // border unless the photo is scaled up enough to push that artifact
-      // outside the frame's clip. Cover the 32px worst-case pulse (bleed
-      // on both edges) based on the frame width. Blur and zoom later ease
-      // out together, so the compensation shrinks in lockstep with the
-      // remaining blur.
-      const bleedScale = 1 + 68 / (window.innerWidth || 400);
-      setScaleAnim("0.2s ease-in-out");
-      setScale(Math.max(1.06, bleedScale));
-    } catch (err) {
-      console.error(err);
-      setError("Couldn't start microphone.");
+  // Resolves once the recognizer reports it has ended — or after `ms`, in
+  // case it never gets around to saying so.
+  const waitForRecognitionEnd = (ms) =>
+    new Promise((resolve) => {
+      if (!recRunningRef.current) {
+        resolve();
+        return;
+      }
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      recEndWaitersRef.current.push(finish);
+      setTimeout(finish, ms);
+    });
+
+  // Hard stop: drop whatever session is live and wait for the engine to let
+  // go of the microphone, so the next hold starts from a clean slate.
+  const releaseRecognition = async () => {
+    const rec = recognitionRef.current;
+    if (!rec || !recRunningRef.current) return;
+    try {
+      rec.abort();
+    } catch {}
+    await waitForRecognitionEnd(500);
+    recRunningRef.current = false;
+  };
+
+  const startRecording = async () => {
+    setError(null);
+    const rec = ensureRecognition();
+    if (!rec) {
+      setError("Speech recognition not supported in this browser.");
+      return;
     }
+
+    const previousMode = mode;
+    transcriptRef.current = "";
+    setTranscript("");
+
+    // Enter the recording state up front — bringing the recognizer back up
+    // can take a beat, and the button has to feel instant regardless.
+    setMode("recording");
+
+    // Ease into the zoom as soon as recording starts. It doubles as
+    // bleed compensation while the photo blurs during processing:
+    // Gaussian blur samples past the element's edges, leaving a faded
+    // border unless the photo is scaled up enough to push that artifact
+    // outside the frame's clip. Cover the 32px worst-case pulse (bleed
+    // on both edges) based on the frame width. Blur and zoom later ease
+    // out together, so the compensation shrinks in lockstep with the
+    // remaining blur.
+    const bleedScale = 1 + 68 / (window.innerWidth || 400);
+    setScaleAnim("0.2s ease-in-out");
+    setScale(Math.max(1.06, bleedScale));
+
+    // The previous hold's session can still be winding down; start() on a
+    // recognizer that hasn't ended yet throws. Let it finish first.
+    await releaseRecognition();
+    if (!micHeldRef.current) return;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        rec.start();
+        recRunningRef.current = true;
+        // Released while we were coming up — don't leave the mic open.
+        if (!micHeldRef.current) releaseRecognition();
+        return;
+      } catch (err) {
+        console.error(err);
+        // Nearly always InvalidStateError: the engine still considers the
+        // last session live. Tear it down and give it a moment.
+        try {
+          rec.abort();
+        } catch {}
+        await waitForRecognitionEnd(500);
+        recRunningRef.current = false;
+        await new Promise((r) => setTimeout(r, 150));
+        if (!micHeldRef.current) return;
+      }
+    }
+
+    setError("Couldn't start microphone.");
+    setMode(previousMode);
+    setScaleAnim("0.2s ease-in-out");
+    setScale(1);
   };
 
   const stopRecordingAndTransform = async () => {
@@ -825,15 +920,18 @@ function App() {
     submittingRef.current = true;
 
     const rec = recognitionRef.current;
-    if (rec) {
+    if (rec && recRunningRef.current) {
       try {
         rec.stop();
       } catch {}
-      recognitionRef.current = null;
     }
 
     // Give the recognizer a beat to flush the last result
     await new Promise((r) => setTimeout(r, 150));
+
+    // Now make sure it has really let go of the microphone — a session left
+    // running is what poisons the next hold.
+    await releaseRecognition();
 
     const finalPrompt = transcriptRef.current.trim();
     if (!finalPrompt) {
@@ -922,16 +1020,19 @@ function App() {
   const onMicDown = (e) => {
     e.preventDefault();
     if (mode === "captured" || mode === "result") {
+      micHeldRef.current = true;
       startRecording();
     }
   };
   const onMicUp = (e) => {
     e.preventDefault();
+    micHeldRef.current = false;
     if (mode === "recording") {
       stopRecordingAndTransform();
     }
   };
   const onMicLeave = () => {
+    micHeldRef.current = false;
     if (mode === "recording") {
       stopRecordingAndTransform();
     }
