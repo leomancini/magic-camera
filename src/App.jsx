@@ -186,6 +186,12 @@ const IconButton = styled.button`
   }
 `;
 
+const LangButton = styled(IconButton)`
+  font-size: ${(p) => (p.$cjk ? "20px" : "15px")};
+  font-weight: 600;
+  letter-spacing: 0.02em;
+`;
+
 const ControlBar = styled.div`
   position: absolute;
   left: 0;
@@ -468,6 +474,29 @@ const measureViewportShortfall = () =>
     : 0;
 
 
+// The Web Speech API listens in one language at a time — there is no
+// auto-detect — so the mic carries a language switch. The Chinese entry
+// follows the device's own variant (Taiwan/Hong Kong keep theirs) and falls
+// back to Mandarin.
+const deviceLang = (navigator.language || "").toLowerCase();
+const speaksChinese = deviceLang.startsWith("zh");
+const CHINESE_LANG = speaksChinese ? navigator.language : "zh-CN";
+
+const SPEECH_LANGS = [
+  { code: "en-US", label: "EN" },
+  { code: CHINESE_LANG, label: "\u4e2d" }
+];
+
+const SPEECH_LANG_KEY = "magic-camera:speech-lang";
+
+const initialSpeechLang = () => {
+  try {
+    const saved = localStorage.getItem(SPEECH_LANG_KEY);
+    if (saved && SPEECH_LANGS.some((l) => l.code === saved)) return saved;
+  } catch {}
+  return speaksChinese ? CHINESE_LANG : "en-US";
+};
+
 // Installed-PWA detection: iOS home-screen apps expose navigator.standalone;
 // everything else (Android, desktop) matches the display-mode media query.
 const isStandalone =
@@ -502,6 +531,8 @@ function App() {
   const [scale, setScale] = useState(1);
   const [scaleAnim, setScaleAnim] = useState(null);
   const [transcript, setTranscript] = useState("");
+  const [speechLang, setSpeechLang] = useState(initialSpeechLang);
+  const speechLangRef = useRef(speechLang);
   const [error, setError] = useState(null);
   const [facing, setFacing] = useState("environment");
   const [hasFacingControl, setHasFacingControl] = useState(false);
@@ -632,6 +663,22 @@ function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facing, camGranted]);
+
+  // Remember the spoken language across launches; the recognizer reads it
+  // from the ref at the start of each hold.
+  useEffect(() => {
+    speechLangRef.current = speechLang;
+    try {
+      localStorage.setItem(SPEECH_LANG_KEY, speechLang);
+    } catch {}
+  }, [speechLang]);
+
+  const cycleSpeechLang = () => {
+    setSpeechLang((current) => {
+      const i = SPEECH_LANGS.findIndex((l) => l.code === current);
+      return SPEECH_LANGS[(i + 1) % SPEECH_LANGS.length].code;
+    });
+  };
 
   // Release the recognizer if the app goes away mid-hold, so it doesn't
   // keep the microphone open.
@@ -781,7 +828,7 @@ function App() {
     if (!Ctor) return null;
 
     const rec = new Ctor();
-    rec.lang = "en-US";
+    rec.lang = speechLangRef.current;
     rec.interimResults = true;
     rec.continuous = true;
 
@@ -884,6 +931,10 @@ function App() {
     // recognizer that hasn't ended yet throws. Let it finish first.
     await releaseRecognition();
     if (!micHeldRef.current) return;
+
+    // The recognizer is reused across holds, so pick up the current language
+    // right before each one.
+    rec.lang = speechLangRef.current;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -1148,6 +1199,10 @@ function App() {
     }
   };
 
+  const speechLangLabel =
+    SPEECH_LANGS.find((l) => l.code === speechLang)?.label || "EN";
+  const speechLangName = speechLangLabel === "EN" ? "English" : "Chinese";
+
   const isLive = mode === "live";
   const showPhoto = mode !== "live" && history.length > 0;
   const isRecording = mode === "recording";
@@ -1261,6 +1316,14 @@ function App() {
           <IconButton onClick={resetToLive} aria-label="Close">
             <XIcon />
           </IconButton>
+          <LangButton
+            onClick={cycleSpeechLang}
+            disabled={isRecording}
+            $cjk={speechLangLabel !== "EN"}
+            aria-label={`Speech language: ${speechLangName}. Tap to switch.`}
+          >
+            {speechLangLabel}
+          </LangButton>
         </BottomLeftSlot>
       )}
 
