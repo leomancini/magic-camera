@@ -510,8 +510,6 @@ function App() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recognitionRef = useRef(null);
-  const recRunningRef = useRef(false);
-  const recEndWaitersRef = useRef([]);
   const micHeldRef = useRef(false);
   const transcriptRef = useRef("");
   const facingRef = useRef("environment");
@@ -686,8 +684,10 @@ function App() {
     () => () => {
       const rec = recognitionRef.current;
       recognitionRef.current = null;
-      recRunningRef.current = false;
       if (rec) {
+        rec.onresult = null;
+        rec.onerror = null;
+        rec.onend = null;
         try {
           rec.abort();
         } catch {}
@@ -790,7 +790,7 @@ function App() {
 
   const resetToLive = () => {
     micHeldRef.current = false;
-    releaseRecognition();
+    discardRecognition();
     if (settleTimerRef.current) {
       clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
@@ -818,12 +818,22 @@ function App() {
   const getRecognitionCtor = () =>
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  // One recognizer for the whole session, restarted on each hold. Building a
-  // fresh SpeechRecognition per press looks harmless but Safari hands back a
-  // dead object for every press after the first, which is why the second
-  // photo always failed with a speech error.
-  const ensureRecognition = () => {
-    if (recognitionRef.current) return recognitionRef.current;
+  // Abandon a recognizer for good. Detaching the handlers first is the point:
+  // a discarded session still fires "aborted" (and sometimes a late result),
+  // and those used to land on the *next* hold's state as a phantom error.
+  const discardRecognition = () => {
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    rec.onresult = null;
+    rec.onerror = null;
+    rec.onend = null;
+    try {
+      rec.abort();
+    } catch {}
+  };
+
+  const buildRecognition = () => {
     const Ctor = getRecognitionCtor();
     if (!Ctor) return null;
 
@@ -858,61 +868,49 @@ function App() {
       }
     };
 
-    rec.onend = () => {
-      recRunningRef.current = false;
-      const waiters = recEndWaitersRef.current;
-      recEndWaitersRef.current = [];
-      waiters.forEach((resolve) => resolve());
-    };
-
-    recognitionRef.current = rec;
     return rec;
   };
 
-  // Resolves once the recognizer reports it has ended — or after `ms`, in
-  // case it never gets around to saying so.
-  const waitForRecognitionEnd = (ms) =>
-    new Promise((resolve) => {
-      if (!recRunningRef.current) {
-        resolve();
-        return;
-      }
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
-      recEndWaitersRef.current.push(finish);
-      setTimeout(finish, ms);
-    });
+  // Each hold gets its own recognizer, started synchronously inside the
+  // pointerdown handler: iOS treats a spent recognition object as dead (a
+  // restart is a silent no-op) and only opens the mic from within the user
+  // gesture, so neither reusing one nor starting after an await survives
+  // there. `retrying` marks the one deferred attempt below.
+  const startRecognition = (retrying) => {
+    discardRecognition();
 
-  // Hard stop: drop whatever session is live and wait for the engine to let
-  // go of the microphone, so the next hold starts from a clean slate.
-  const releaseRecognition = async () => {
-    const rec = recognitionRef.current;
-    if (!rec || !recRunningRef.current) return;
-    try {
-      rec.abort();
-    } catch {}
-    await waitForRecognitionEnd(500);
-    recRunningRef.current = false;
-  };
-
-  const startRecording = async () => {
-    setError(null);
-    const rec = ensureRecognition();
+    const rec = buildRecognition();
     if (!rec) {
       setError("Speech recognition not supported in this browser.");
-      return;
+      return false;
     }
 
-    const previousMode = mode;
+    try {
+      rec.start();
+      recognitionRef.current = rec;
+      return true;
+    } catch (err) {
+      console.error(err);
+      if (retrying) return false;
+      // The engine can still be holding the previous session; give it a beat
+      // and take one more run at it.
+      setTimeout(() => {
+        if (!micHeldRef.current) return;
+        if (!startRecognition(true)) {
+          setError("Couldn't start microphone.");
+        }
+      }, 250);
+      return true;
+    }
+  };
+
+  const startRecording = () => {
+    setError(null);
     transcriptRef.current = "";
     setTranscript("");
 
-    // Enter the recording state up front — bringing the recognizer back up
-    // can take a beat, and the button has to feel instant regardless.
+    if (!startRecognition(false)) return;
+
     setMode("recording");
 
     // Ease into the zoom as soon as recording starts. It doubles as
@@ -926,41 +924,6 @@ function App() {
     const bleedScale = 1 + 68 / (window.innerWidth || 400);
     setScaleAnim("0.2s ease-in-out");
     setScale(Math.max(1.06, bleedScale));
-
-    // The previous hold's session can still be winding down; start() on a
-    // recognizer that hasn't ended yet throws. Let it finish first.
-    await releaseRecognition();
-    if (!micHeldRef.current) return;
-
-    // The recognizer is reused across holds, so pick up the current language
-    // right before each one.
-    rec.lang = speechLangRef.current;
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        rec.start();
-        recRunningRef.current = true;
-        // Released while we were coming up — don't leave the mic open.
-        if (!micHeldRef.current) releaseRecognition();
-        return;
-      } catch (err) {
-        console.error(err);
-        // Nearly always InvalidStateError: the engine still considers the
-        // last session live. Tear it down and give it a moment.
-        try {
-          rec.abort();
-        } catch {}
-        await waitForRecognitionEnd(500);
-        recRunningRef.current = false;
-        await new Promise((r) => setTimeout(r, 150));
-        if (!micHeldRef.current) return;
-      }
-    }
-
-    setError("Couldn't start microphone.");
-    setMode(previousMode);
-    setScaleAnim("0.2s ease-in-out");
-    setScale(1);
   };
 
   const stopRecordingAndTransform = async () => {
@@ -971,7 +934,7 @@ function App() {
     submittingRef.current = true;
 
     const rec = recognitionRef.current;
-    if (rec && recRunningRef.current) {
+    if (rec) {
       try {
         rec.stop();
       } catch {}
@@ -980,9 +943,9 @@ function App() {
     // Give the recognizer a beat to flush the last result
     await new Promise((r) => setTimeout(r, 150));
 
-    // Now make sure it has really let go of the microphone — a session left
-    // running is what poisons the next hold.
-    await releaseRecognition();
+    // Then let it go entirely, so it can't hold the microphone (or fire a
+    // late error) into the next hold.
+    discardRecognition();
 
     const finalPrompt = transcriptRef.current.trim();
     if (!finalPrompt) {
